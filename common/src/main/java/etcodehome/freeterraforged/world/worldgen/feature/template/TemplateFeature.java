@@ -3,6 +3,7 @@ package etcodehome.freeterraforged.world.worldgen.feature.template;
 import java.util.List;
 
 import com.mojang.serialization.Codec;
+import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 
 import etcodehome.freeterraforged.FTFCommon;
@@ -18,30 +19,37 @@ import etcodehome.freeterraforged.world.worldgen.feature.template.template.Featu
 import etcodehome.freeterraforged.world.worldgen.feature.template.template.TemplateContext;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceKey;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.WorldGenLevel;
 import net.minecraft.world.level.block.Mirror;
 import net.minecraft.world.level.block.Rotation;
+import net.minecraft.world.level.chunk.ChunkGenerator;
 import net.minecraft.world.level.levelgen.feature.Feature;
-import net.minecraft.world.level.levelgen.feature.FeaturePlaceContext;
-import net.minecraft.world.level.levelgen.feature.configurations.FeatureConfiguration;
-import etcodehome.freeterraforged.world.worldgen.feature.template.TemplateFeature.Config;
 
-public class TemplateFeature extends Feature<Config<?>> {
+public class TemplateFeature implements Feature {
+	public static final MapCodec<TemplateFeature> CODEC = Config.MAP_CODEC.xmap(TemplateFeature::new, TemplateFeature::config);
 
-	public TemplateFeature(Codec<Config<?>> codec) {
-		super(codec);
+	private final Config<?> config;
+
+	public TemplateFeature(Config<?> config) {
+		this.config = config;
+	}
+
+	public Config<?> config() {
+		return this.config;
 	}
 
 	@Override
-	public boolean place(FeaturePlaceContext<Config<?>> ctx) {
-		RandomSource random = ctx.random();
-		Config<?> config = ctx.config();
-		
+	public MapCodec<TemplateFeature> codec() {
+		return CODEC;
+	}
+
+	@Override
+	public boolean place(WorldGenLevel level, ChunkGenerator chunkGenerator, RandomSource random, BlockPos origin) {
 		Mirror mirror = nextMirror(random);
 		Rotation rotation = nextRotation(random);
-        return paste(ctx.level(), random, ctx.origin(), mirror, rotation, config, FeatureTemplate.WORLD_GEN);
+        return paste(level, random, origin, mirror, rotation, this.config, FeatureTemplate.WORLD_GEN);
 	}
 
     public static <T extends TemplateContext> boolean paste(WorldGenLevel world, RandomSource rand, BlockPos pos, Mirror mirror, Rotation rotation, Config<T> config, PasteType pasteType) {
@@ -57,7 +65,7 @@ public class TemplateFeature extends Feature<Config<?>> {
         if(world.getServer() instanceof FTFMinecraftServer ftfMinecraftServer) {
 	        DecoratorConfig<T> decoratorConfig = config.decorator();
 	        
-	        ResourceLocation templateName = nextTemplate(config.templates, rand);
+	        Identifier templateName = nextTemplate(config.templates, rand);
 
 			// safely load features and fail verbosely otherwise
 	        FeatureTemplate template = ftfMinecraftServer.getFeatureTemplateManager().load(templateName);
@@ -75,7 +83,7 @@ public class TemplateFeature extends Feature<Config<?>> {
 	        Paste paste = pasteType.get(template);
 	        T buffer = placement.createContext();
 	        if (paste.apply(world, buffer, pos, mirror, rotation, placement, config.paste())) {
-	            ResourceLocation biome = world.getBiome(pos).unwrapKey().map(ResourceKey::registry).orElse(null);
+	            Identifier biome = world.getBiome(pos).unwrapKey().map(ResourceKey::identifier).orElse(null);
 	            for (TemplateDecorator<T> decorator : decoratorConfig.getDecorators(biome)) {
 	                decorator.apply(world, buffer, rand, modified);
 	            }
@@ -88,7 +96,7 @@ public class TemplateFeature extends Feature<Config<?>> {
         }
     }
 
-	private static ResourceLocation nextTemplate(List<ResourceLocation> templates, RandomSource random) {
+	private static Identifier nextTemplate(List<Identifier> templates, RandomSource random) {
         return templates.get(random.nextInt(templates.size()));
     }
 
@@ -100,13 +108,14 @@ public class TemplateFeature extends Feature<Config<?>> {
         return Rotation.values()[random.nextInt(Rotation.values().length)];
     }
     
-	public record Config<T extends TemplateContext>(List<ResourceLocation> templates, TemplatePlacement<T> placement, PasteConfig paste, DecoratorConfig<T> decorator) implements FeatureConfiguration {
+	public record Config<T extends TemplateContext>(List<Identifier> templates, TemplatePlacement<T> placement, PasteConfig paste, DecoratorConfig<T> decorator) {
 		@SuppressWarnings({ "unchecked", "rawtypes" })
-		public static final Codec<Config<?>> CODEC = RecordCodecBuilder.create(instance -> instance.group(
-			ResourceLocation.CODEC.listOf().fieldOf("templates").forGetter(Config::templates),
+		public static final MapCodec<Config<?>> MAP_CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
+			Identifier.CODEC.listOf().fieldOf("templates").forGetter(Config::templates),
 			TemplatePlacement.CODEC.fieldOf("placement").forGetter(Config::placement),
 			PasteConfig.CODEC.fieldOf("paste").forGetter(Config::paste),
 			DecoratorConfig.CODEC.fieldOf("decorator").forGetter(Config::decorator)
 		).apply(instance, (templates, placement, paste, decorator) -> new Config(templates, placement, paste, decorator)));
+		public static final Codec<Config<?>> CODEC = MAP_CODEC.codec();
 	}
 }

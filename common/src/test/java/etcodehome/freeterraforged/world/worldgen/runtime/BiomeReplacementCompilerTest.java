@@ -14,7 +14,7 @@ import net.minecraft.core.RegistrationInfo;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceKey;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.SharedConstants;
 import net.minecraft.server.Bootstrap;
 import net.minecraft.tags.TagKey;
@@ -47,17 +47,17 @@ class BiomeReplacementCompilerTest {
 		MappedRegistry<Biome> registry = new MappedRegistry<>(Registries.BIOME, Lifecycle.stable());
 		RegistrationInfo info = new RegistrationInfo(Optional.empty(), Lifecycle.stable());
 
-		plains = registry.register(ResourceKey.create(Registries.BIOME, ResourceLocation.parse("minecraft:plains")), createBiome(), info);
-		desert = registry.register(ResourceKey.create(Registries.BIOME, ResourceLocation.parse("minecraft:desert")), createBiome(), info);
-		forest = registry.register(ResourceKey.create(Registries.BIOME, ResourceLocation.parse("minecraft:forest")), createBiome(), info);
-		taiga = registry.register(ResourceKey.create(Registries.BIOME, ResourceLocation.parse("minecraft:taiga")), createBiome(), info);
-		deepDark = registry.register(ResourceKey.create(Registries.BIOME, ResourceLocation.parse("minecraft:deep_dark")), createBiome(), info);
-		deferredPlaceholder = registry.register(ResourceKey.create(Registries.BIOME, ResourceLocation.parse("terrablender:deferred_placeholder")), createBiome(), info);
+		plains = registry.register(ResourceKey.create(Registries.BIOME, Identifier.parse("minecraft:plains")), createBiome(), info);
+		desert = registry.register(ResourceKey.create(Registries.BIOME, Identifier.parse("minecraft:desert")), createBiome(), info);
+		forest = registry.register(ResourceKey.create(Registries.BIOME, Identifier.parse("minecraft:forest")), createBiome(), info);
+		taiga = registry.register(ResourceKey.create(Registries.BIOME, Identifier.parse("minecraft:taiga")), createBiome(), info);
+		deepDark = registry.register(ResourceKey.create(Registries.BIOME, Identifier.parse("minecraft:deep_dark")), createBiome(), info);
+		deferredPlaceholder = registry.register(ResourceKey.create(Registries.BIOME, Identifier.parse("terrablender:deferred_placeholder")), createBiome(), info);
 
-		TagKey<Biome> forestTag = TagKey.create(Registries.BIOME, ResourceLocation.parse("minecraft:is_forest"));
-		TagKey<Biome> emptyTag = TagKey.create(Registries.BIOME, ResourceLocation.parse("minecraft:is_empty_tag"));
-		TagKey<Biome> mixedTag = TagKey.create(Registries.BIOME, ResourceLocation.parse("minecraft:mixed_with_marker"));
-		TagKey<Biome> onlyMarkerTag = TagKey.create(Registries.BIOME, ResourceLocation.parse("minecraft:only_marker"));
+		TagKey<Biome> forestTag = TagKey.create(Registries.BIOME, Identifier.parse("minecraft:is_forest"));
+		TagKey<Biome> emptyTag = TagKey.create(Registries.BIOME, Identifier.parse("minecraft:is_empty_tag"));
+		TagKey<Biome> mixedTag = TagKey.create(Registries.BIOME, Identifier.parse("minecraft:mixed_with_marker"));
+		TagKey<Biome> onlyMarkerTag = TagKey.create(Registries.BIOME, Identifier.parse("minecraft:only_marker"));
 
 		registry.bindTags(Map.of(
 			forestTag, List.of(forest),
@@ -74,7 +74,7 @@ class BiomeReplacementCompilerTest {
 			.hasPrecipitation(false)
 			.temperature(0.5f)
 			.downfall(0.5f)
-			.specialEffects(new BiomeSpecialEffects.Builder().waterColor(0).waterFogColor(0).fogColor(0).skyColor(0).build())
+			.specialEffects(new BiomeSpecialEffects.Builder().waterColor(0).build())
 			.mobSpawnSettings(MobSpawnSettings.EMPTY)
 			.generationSettings(BiomeGenerationSettings.EMPTY)
 			.build();

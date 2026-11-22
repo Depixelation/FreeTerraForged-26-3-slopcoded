@@ -11,15 +11,16 @@ import com.mojang.serialization.codecs.RecordCodecBuilder;
 
 import etcodehome.freeterraforged.world.worldgen.noise.NoiseUtil;
 import net.minecraft.util.ExtraCodecs;
-import net.minecraft.util.KeyDispatchDataCodec;
 import net.minecraft.util.Mth;
-import net.minecraft.world.level.levelgen.DensityFunction;
-import net.minecraft.world.level.levelgen.DensityFunctions;
+import net.minecraft.world.level.levelgen.densityfunction.DensityFunction;
+import net.minecraft.world.level.levelgen.densityfunction.DensityFunctions;
+import net.minecraft.world.level.levelgen.densityfunction.DensitySampler;
+import net.minecraft.world.level.levelgen.densityfunction.DfRewriteRule;
 
-public record LinearSplineFunction(DensityFunction input, List<Pair<Double, DensityFunction>> points, double minValue, double maxValue) implements DensityFunction {
+public record LinearSplineFunction(DensityFunction input, List<Pair<Double, DensityFunction>> points, double minValue, double maxValue) implements MarkerFunction {
 	public static final MapCodec<LinearSplineFunction> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
-		DensityFunction.HOLDER_HELPER_CODEC.fieldOf("input").forGetter(LinearSplineFunction::input),
-		ExtraCodecs.nonEmptyList(Codec.pair(Codec.DOUBLE, DensityFunction.HOLDER_HELPER_CODEC).listOf()).fieldOf("points").forGetter(LinearSplineFunction::points)
+		DensityFunction.CODEC.fieldOf("input").forGetter(LinearSplineFunction::input),
+		ExtraCodecs.nonEmptyList(Codec.pair(Codec.DOUBLE, DensityFunction.CODEC).listOf()).fieldOf("points").forGetter(LinearSplineFunction::points)
 	).apply(instance, LinearSplineFunction::new));
 	
 	public LinearSplineFunction(DensityFunction input, List<Pair<Double, DensityFunction>> points) {
@@ -28,47 +29,88 @@ public record LinearSplineFunction(DensityFunction input, List<Pair<Double, Dens
 	
 	@Override
 	public double compute(FunctionContext ctx) {
-		double input = this.input.compute(ctx);
+		double in = MarkerFunction.compute(this.input, ctx);
 		int pointCount = this.points.size();
 		
 		Pair<Double, DensityFunction> first = this.points.get(0);
-		if(input <= first.getFirst()) {
-			return first.getSecond().compute(ctx);
+		if(in <= first.getFirst()) {
+			return MarkerFunction.compute(first.getSecond(), ctx);
 		}
 
 		Pair<Double, DensityFunction> last = this.points.get(pointCount - 1);
-		if(input >= last.getFirst()) {
-			return last.getSecond().compute(ctx);
+		if(in >= last.getFirst()) {
+			return MarkerFunction.compute(last.getSecond(), ctx);
 		}
 		
-		int index = Mth.binarySearch(0, pointCount, i -> input < this.points.get(i).getFirst()) - 1;
+		int index = Mth.binarySearch(0, pointCount, i -> in < this.points.get(i).getFirst()) - 1;
 		Pair<Double, DensityFunction> start = this.points.get(index);
 		Pair<Double, DensityFunction> end = this.points.get(index + 1);
 		double min = start.getFirst();
 		double max = end.getFirst();
-		double from = start.getSecond().compute(ctx);
-		double to = end.getSecond().compute(ctx);
+		double from = MarkerFunction.compute(start.getSecond(), ctx);
+		double to = MarkerFunction.compute(end.getSecond(), ctx);
 		
-		double lerp = NoiseUtil.map(input, 0.0D, 1.0D, min, max);
+		double lerp = NoiseUtil.map(in, 0.0D, 1.0D, min, max);
 		lerp = NoiseUtil.clamp(lerp, 0.0D, 1.0D);
 		return NoiseUtil.lerp(from, to, lerp);
 	}
 
 	@Override
-	public void fillArray(double[] array, ContextProvider ctxProvider) {
-		ctxProvider.fillAllDirectly(array, this);
+	public DensitySampler compileSampler(CompileContext context) {
+		DensitySampler inputSampler = this.input.compileSampler(context);
+		int pointCount = this.points.size();
+		double[] keys = new double[pointCount];
+		DensitySampler[] samplers = new DensitySampler[pointCount];
+		for (int i = 0; i < pointCount; i++) {
+			Pair<Double, DensityFunction> p = this.points.get(i);
+			keys[i] = p.getFirst();
+			samplers[i] = p.getSecond().compileSampler(context);
+		}
+		return MarkerFunction.pointSampler((samplerCtx, x, y, z) -> {
+			double in = inputSampler.sampleValue(samplerCtx, x, y, z);
+			if (in <= keys[0]) {
+				return samplers[0].sampleValue(samplerCtx, x, y, z);
+			}
+			if (in >= keys[pointCount - 1]) {
+				return samplers[pointCount - 1].sampleValue(samplerCtx, x, y, z);
+			}
+			int index = Mth.binarySearch(0, pointCount, i -> in < keys[i]) - 1;
+			double min = keys[index];
+			double max = keys[index + 1];
+			double from = samplers[index].sampleValue(samplerCtx, x, y, z);
+			double to = samplers[index + 1].sampleValue(samplerCtx, x, y, z);
+			double lerp = NoiseUtil.clamp(NoiseUtil.map(in, 0.0D, 1.0D, min, max), 0.0D, 1.0D);
+			return (float) NoiseUtil.lerp(from, to, lerp);
+		});
+	}
+
+	@Override
+	public DensityFunction rewriteChildren(DfRewriteRule rule) {
+		return new LinearSplineFunction(
+			rule.rewrite(this.input),
+			this.points.stream().map(point -> Pair.of(point.getFirst(), rule.rewrite(point.getSecond()))).toList()
+		);
+	}
+
+	@Override
+	public int domainAxes() {
+		int axes = this.input.domainAxes();
+		for (Pair<Double, DensityFunction> p : this.points) {
+			axes |= p.getSecond().domainAxes();
+		}
+		return axes;
 	}
 
 	@Override
 	public DensityFunction mapAll(Visitor visitor) {
-		return visitor.apply(new LinearSplineFunction(this.input.mapAll(visitor), this.points.stream().map((point) -> {
-			return Pair.of(point.getFirst(), visitor.apply(point.getSecond()));
+		return visitor.apply(new LinearSplineFunction(MarkerFunction.mapAll(this.input, visitor), this.points.stream().map((point) -> {
+			return Pair.of(point.getFirst(), MarkerFunction.mapAll(point.getSecond(), visitor));
 		}).toList()));
 	}
 
 	@Override
-	public KeyDispatchDataCodec<LinearSplineFunction> codec() {
-		return new KeyDispatchDataCodec<>(CODEC);
+	public MapCodec<LinearSplineFunction> codec() {
+		return CODEC;
 	}
 
 	public static LinearSplineFunction.Builder builder(DensityFunction input) {
@@ -76,11 +118,11 @@ public record LinearSplineFunction(DensityFunction input, List<Pair<Double, Dens
 	}
 	
 	private static float min(List<Pair<Double, DensityFunction>> points) {
-		return (float) points.stream().map(Pair::getSecond).mapToDouble(DensityFunction::minValue).min().orElseThrow();
+		return (float) points.stream().map(Pair::getSecond).mapToDouble(fn -> fn.range().min()).min().orElseThrow();
 	}
 	
 	private static float max(List<Pair<Double, DensityFunction>> points) {
-		return (float) points.stream().map(Pair::getSecond).mapToDouble(DensityFunction::maxValue).max().orElseThrow();
+		return (float) points.stream().map(Pair::getSecond).mapToDouble(fn -> fn.range().max()).max().orElseThrow();
 	}
 	
 	public static class Builder {
@@ -93,7 +135,7 @@ public record LinearSplineFunction(DensityFunction input, List<Pair<Double, Dens
 		}
 		
 		public Builder addPoint(double point, double value) {
-			return this.addPoint(point, DensityFunctions.constant(value));
+			return this.addPoint(point, DensityFunctions.constant((float) value));
 		}
 
 		public Builder addPoint(double point, DensityFunction value) {

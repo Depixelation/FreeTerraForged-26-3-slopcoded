@@ -15,7 +15,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 
 import net.minecraft.core.Holder;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.biome.Biome;
 import etcodehome.freeterraforged.world.worldgen.feature.ore.DynamicOrePlan;
 import etcodehome.freeterraforged.world.worldgen.feature.placement.ChunkLocalPlacementClassifier;
@@ -65,7 +65,7 @@ public final class WorldgenPlanDiagnostics {
 			WorldgenFacet.SAMPLER_DECORATION, stage.id(), stage.order(), "ordered_transform"
 		)));
 		int surfaceOrder = 0;
-		for (ResourceLocation id : plan.surface().appliedTransforms()) {
+		for (Identifier id : plan.surface().appliedTransforms()) {
 			mutableContributions.add(new Contribution(
 				WorldgenFacet.SURFACE, id, surfaceOrder++, "materialized_transform"
 			));
@@ -90,9 +90,9 @@ public final class WorldgenPlanDiagnostics {
 			.sorted(Comparator.comparing((Revision value) -> value.mechanism().toString())
 				.thenComparing(value -> value.scope().toString()))
 			.toList();
-		Map<ResourceLocation, Failure> revisionFailures = new LinkedHashMap<>();
+		Map<Identifier, Failure> revisionFailures = new LinkedHashMap<>();
 		owner.contributionRevision().failures().entrySet().stream()
-			.sorted(Map.Entry.comparingByKey(Comparator.comparing(ResourceLocation::toString)))
+			.sorted(Map.Entry.comparingByKey(Comparator.comparing(Identifier::toString)))
 			.forEach(entry -> revisionFailures.put(entry.getKey(), Failure.of(entry.getValue())));
 
 		GraphCensus graph = new GraphCensus(
@@ -132,7 +132,7 @@ public final class WorldgenPlanDiagnostics {
 			.map(settings -> {
 				var noise = settings.value().noiseSettings();
 				return new DensityExtent(
-					true, "full_configured_height", noise.minY(), noise.height(), noise.getCellHeight(),
+					true, "full_configured_height", noise.minY(), noise.height(), 8,
 					"bounded_density_analysis_not_enabled"
 				);
 			})
@@ -145,7 +145,7 @@ public final class WorldgenPlanDiagnostics {
 		BiomeReplacementConfigSnapshot replacementConfig = replacementPlan.config();
 		return new Snapshot(
 			new Owner(
-				owner.id().toString(), owner.type(), owner.dimension().location(), owner.settingsIdentity(),
+				owner.id().toString(), owner.type(), owner.dimension().identifier(), owner.settingsIdentity(),
 				owner.resourceRevision(), owner.resourceLayerFingerprint(),
 				owner.tagEpoch().sequence(), owner.tagEpoch().fingerprint(),
 				revisions, revisionFailures
@@ -342,14 +342,14 @@ public final class WorldgenPlanDiagnostics {
 	public record Owner(
 		String id,
 		WorldgenOwnerType type,
-		ResourceLocation dimension,
+		Identifier dimension,
 		String settingsIdentity,
 		long resourceRevision,
 		String resourceLayerFingerprint,
 		long tagRevision,
 		String tagFingerprint,
 		List<Revision> contributionRevisions,
-		Map<ResourceLocation, Failure> contributionFailures
+		Map<Identifier, Failure> contributionFailures
 	) {
 		public Owner {
 			id = Objects.requireNonNull(id, "id");
@@ -380,7 +380,7 @@ public final class WorldgenPlanDiagnostics {
 			));
 			JsonArray failures = new JsonArray();
 			this.contributionFailures.entrySet().stream()
-				.sorted(Map.Entry.comparingByKey(Comparator.comparing(ResourceLocation::toString)))
+				.sorted(Map.Entry.comparingByKey(Comparator.comparing(Identifier::toString)))
 				.forEach(entry -> {
 					JsonObject failure = entry.getValue().toJson();
 					failure.addProperty("provider", entry.getKey().toString());
@@ -394,8 +394,8 @@ public final class WorldgenPlanDiagnostics {
 	public record SourceShape(
 		String normalizedMechanism,
 		CapabilityState state,
-		Optional<ResourceLocation> rootProviderDomain,
-		Optional<ResourceLocation> directSourceRoot
+		Optional<Identifier> rootProviderDomain,
+		Optional<Identifier> directSourceRoot
 	) {
 		public SourceShape {
 			normalizedMechanism = Objects.requireNonNull(normalizedMechanism, "normalizedMechanism");
@@ -416,7 +416,7 @@ public final class WorldgenPlanDiagnostics {
 
 	public record Facet(
 		WorldgenFacet facet,
-		ResourceLocation descriptor,
+		Identifier descriptor,
 		CapabilityState state,
 		String mechanism,
 		String detail,
@@ -436,7 +436,7 @@ public final class WorldgenPlanDiagnostics {
 		}
 	}
 
-	public record Provider(ResourceLocation id, int order, double weight, int candidateCount) {
+	public record Provider(Identifier id, int order, double weight, int candidateCount) {
 		private JsonObject toJson() {
 			JsonObject value = new JsonObject();
 			value.addProperty("id", this.id.toString());
@@ -447,7 +447,7 @@ public final class WorldgenPlanDiagnostics {
 		}
 	}
 
-	public record Contribution(WorldgenFacet facet, ResourceLocation id, int order, String kind) {
+	public record Contribution(WorldgenFacet facet, Identifier id, int order, String kind) {
 		private JsonObject toJson() {
 			JsonObject value = new JsonObject();
 			value.addProperty("facet", lower(this.facet));
@@ -458,9 +458,9 @@ public final class WorldgenPlanDiagnostics {
 		}
 	}
 
-	public record Output(Optional<ResourceLocation> id) {
+	public record Output(Optional<Identifier> id) {
 		private static Output of(Holder<Biome> holder) {
-			return new Output(holder.unwrapKey().map(key -> key.location()));
+			return new Output(holder.unwrapKey().map(key -> key.identifier()));
 		}
 
 		private JsonObject toJson() {
@@ -471,7 +471,7 @@ public final class WorldgenPlanDiagnostics {
 		}
 	}
 
-	public record Revision(ResourceLocation mechanism, ResourceLocation scope, long revision) {
+	public record Revision(Identifier mechanism, Identifier scope, long revision) {
 		private JsonObject toJson() {
 			JsonObject value = new JsonObject();
 			value.addProperty("mechanism", this.mechanism.toString());
@@ -661,7 +661,7 @@ public final class WorldgenPlanDiagnostics {
 	}
 
 	public record UnavailableNode(
-		ResourceLocation id,
+		Identifier id,
 		WorldgenFacet facet,
 		String mechanism,
 		WorldgenOwnerType owner,
@@ -682,7 +682,7 @@ public final class WorldgenPlanDiagnostics {
 
 	public record ProviderDiagnostic(
 		String source,
-		Optional<ResourceLocation> provider,
+		Optional<Identifier> provider,
 		Optional<WorldgenFacet> facet,
 		Failure failure
 	) {

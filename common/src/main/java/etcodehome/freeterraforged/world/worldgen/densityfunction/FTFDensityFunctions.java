@@ -4,7 +4,7 @@ import com.mojang.serialization.MapCodec;
 import etcodehome.freeterraforged.platform.RegistryUtil;
 import net.minecraft.core.Holder;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.world.level.levelgen.DensityFunction;
+import net.minecraft.world.level.levelgen.densityfunction.DensityFunction;
 import etcodehome.freeterraforged.world.worldgen.noise.module.Noise;
 
 public class FTFDensityFunctions {

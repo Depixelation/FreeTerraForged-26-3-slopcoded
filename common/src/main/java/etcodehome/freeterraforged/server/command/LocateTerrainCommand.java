@@ -117,7 +117,7 @@ public final class LocateTerrainCommand {
 		// 4. Search all registered levels on the server (first matching FTF namespace)
 		for (ServerLevel level : server.getAllLevels()) {
 			if (level != currentLevel && level != ftfLevel && level != overworld) {
-				if (level.dimension().location().getNamespace().equals(FTFCommon.MOD_ID)) {
+				if (level.dimension().identifier().getNamespace().equals(FTFCommon.MOD_ID)) {
 					context = extractContext(level);
 					if (context != null) {
 						return new TargetLevel(level, context);
@@ -142,7 +142,7 @@ public final class LocateTerrainCommand {
 
 	public static LiteralArgumentBuilder<CommandSourceStack> build() {
 		return Commands.literal("locate")
-			.requires(source -> source.hasPermission(2))
+			.requires(Commands.hasPermission(Commands.LEVEL_GAMEMASTERS))
 			.then(Commands.literal("cancel")
 				.executes(context -> cancel(context.getSource()))
 			)
@@ -171,7 +171,7 @@ public final class LocateTerrainCommand {
 
 	public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
 		dispatcher.register(Commands.literal("ftf")
-			.requires(source -> source.hasPermission(2))
+			.requires(Commands.hasPermission(Commands.LEVEL_GAMEMASTERS))
 			.then(build())
 		);
 	}
@@ -347,12 +347,12 @@ public final class LocateTerrainCommand {
 		int distance = (int) Math.sqrt((double) match.distanceSq());
 		String tpCommand = targetLevel == source.getLevel()
 			? "/tp @s " + match.x() + " ~ " + match.z()
-			: "/execute in " + targetLevel.dimension().location() + " run tp @s " + match.x() + " ~ " + match.z();
+			: "/execute in " + targetLevel.dimension().identifier() + " run tp @s " + match.x() + " ~ " + match.z();
 		Component coordinates = ComponentUtils.wrapInSquareBrackets(Component.translatable("chat.coordinates", match.x(), "~", match.z()))
 			.withStyle(style -> style
 				.withColor(ChatFormatting.GREEN)
-				.withClickEvent(new ClickEvent(ClickEvent.Action.SUGGEST_COMMAND, tpCommand))
-				.withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, Component.translatable("chat.coordinates.tooltip"))));
+				.withClickEvent(new ClickEvent.SuggestCommand(tpCommand))
+				.withHoverEvent(new HoverEvent.ShowText(Component.translatable("chat.coordinates.tooltip"))));
 		source.sendSuccess(() -> Component.translatableWithFallback(
 			KEY + "success", "Found %s terrain at %s (%s blocks away).", name, coordinates, distance
 		), false);

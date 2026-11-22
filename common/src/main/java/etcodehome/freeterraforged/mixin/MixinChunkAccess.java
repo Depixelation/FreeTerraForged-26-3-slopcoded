@@ -67,7 +67,7 @@ public abstract class MixinChunkAccess implements IFlowFieldHolder, IChunkCellsH
 			current = ref != null ? ref.get() : null;
 			if (current == null) {
 				ChunkAccess chunk = (ChunkAccess) (Object) this;
-				current = context.filteredChunkCache.getFilteredChunk(chunk.getPos().x, chunk.getPos().z);
+				current = context.filteredChunkCache.getFilteredChunk(chunk.getPos().x(), chunk.getPos().z());
 				this.freeterraforged$chunkCellsRef = new SoftReference<>(current);
 			}
 		}

@@ -13,7 +13,7 @@ import net.minecraft.core.Holder;
 import net.minecraft.core.Registry;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.chunk.ChunkGenerator;
 import net.minecraft.world.level.levelgen.placement.PlacedFeature;
@@ -38,7 +38,7 @@ public final class DynamicOrePlanner {
 		Collection<Holder<Biome>> possibleBiomes,
 		VerticalFrame verticalFrame
 	) {
-		Registry<PlacedFeature> placedFeatures = registries.registryOrThrow(Registries.PLACED_FEATURE);
+		Registry<PlacedFeature> placedFeatures = registries.lookupOrThrow(Registries.PLACED_FEATURE);
 		List<BiomeInput> biomes = possibleBiomes.stream().map(biome -> new BiomeInput(
 			generator.getBiomeGenerationSettings(biome).features().stream()
 				.map(step -> step.stream()
@@ -57,7 +57,7 @@ public final class DynamicOrePlanner {
 		List<FeatureInput> inputs = new ArrayList<>();
 		for (Holder<PlacedFeature> holder : features) {
 			inputs.add(new FeatureInput(
-				holder.unwrapKey().map(key -> key.location().toString()).orElse("<direct>"),
+				holder.unwrapKey().map(key -> key.identifier().toString()).orElse("<direct>"),
 				holder.value()
 			));
 		}
@@ -145,9 +145,9 @@ public final class DynamicOrePlanner {
 
 	private static String featureId(Holder<PlacedFeature> holder, PlacedFeature feature, Registry<PlacedFeature> registry) {
 		return holder.unwrapKey()
-			.map(key -> key.location().toString())
+			.map(key -> key.identifier().toString())
 			.orElseGet(() -> {
-				ResourceLocation id = registry.getKey(feature);
+				Identifier id = registry.getKey(feature);
 				return id == null ? "<direct>" : id.toString();
 			});
 	}

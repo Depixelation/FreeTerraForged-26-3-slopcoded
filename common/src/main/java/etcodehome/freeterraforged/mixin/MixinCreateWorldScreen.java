@@ -90,25 +90,28 @@ public abstract class MixinCreateWorldScreen {
 	}
 
 	@ModifyArg(
-		method = "openFresh",
-		at = @At(value = "INVOKE", target = "Lnet/minecraft/client/gui/screens/worldselection/CreateWorldScreen;<init>(Lnet/minecraft/client/Minecraft;Lnet/minecraft/client/gui/screens/Screen;Lnet/minecraft/client/gui/screens/worldselection/WorldCreationContext;Ljava/util/Optional;Ljava/util/OptionalLong;)V"),
-		index = 3,
+		method = "openFresh(Lnet/minecraft/client/Minecraft;Ljava/lang/Runnable;Lnet/minecraft/client/gui/screens/worldselection/CreateWorldCallback;)V",
+		at = @At(
+			value = "INVOKE",
+			target = "Lnet/minecraft/client/gui/screens/worldselection/CreateWorldScreen;openCreateWorldScreen(Lnet/minecraft/client/Minecraft;Ljava/lang/Runnable;Ljava/util/function/Function;Lnet/minecraft/client/gui/screens/worldselection/WorldCreationContextMapper;Lnet/minecraft/resources/ResourceKey;Lnet/minecraft/client/gui/screens/worldselection/CreateWorldCallback;)V"
+		),
+		index = 4,
 		require = 1,
 		allow = 1
 	)
-	private static Optional<ResourceKey<WorldPreset>> freeterraforged$selectDefaultWorldType(
-		Optional<ResourceKey<WorldPreset>> original
+	private static ResourceKey<WorldPreset> freeterraforged$selectDefaultWorldType(
+		ResourceKey<WorldPreset> original
 	) {
-		return Optional.of(FTFWorldPresets.FREETERRAFORGED);
+		return FTFWorldPresets.FREETERRAFORGED;
 	}
 
-	@Inject(method = "openFresh", at = @At("TAIL"))
+	@Inject(method = "openFresh(Lnet/minecraft/client/Minecraft;Ljava/lang/Runnable;)V", at = @At("TAIL"))
 	private static void freeterraforged$applySavedDefaultPreset(
 		Minecraft minecraft,
-		Screen lastScreen,
+		Runnable onExit,
 		CallbackInfo callback
 	) {
-		if (minecraft.screen instanceof CreateWorldScreen screen) {
+		if (minecraft.gui.screen() instanceof CreateWorldScreen screen) {
 			((MixinCreateWorldScreen) (Object) screen).freeterraforged$initializeDefaultPreset();
 		}
 	}
@@ -133,8 +136,8 @@ public abstract class MixinCreateWorldScreen {
 	private void freeterraforged$triggerPendingCreate() {
 		if (this.freeterraforged$pendingCreateOnReload) {
 			this.freeterraforged$pendingCreateOnReload = false;
-			Minecraft.getInstance().tell(() -> {
-				if (Minecraft.getInstance().screen == (Object) this) {
+			Minecraft.getInstance().execute(() -> {
+				if (Minecraft.getInstance().gui.screen() == (Object) this) {
 					this.onCreate();
 				}
 			});
@@ -227,9 +230,12 @@ public abstract class MixinCreateWorldScreen {
 
 	// The unique encode call is in a reload lambda whose compiler-generated name is unstable.
 	@ModifyArg(
-		method = "*",
-		at = @At(value = "INVOKE", target = "Lnet/minecraft/world/level/levelgen/WorldGenSettings;encode(Lcom/mojang/serialization/DynamicOps;Lnet/minecraft/world/level/levelgen/WorldOptions;Lnet/minecraft/world/level/levelgen/WorldDimensions;)Lcom/mojang/serialization/DataResult;"),
-		index = 2,
+		method = "lambda$applyNewPackConfig$0",
+		at = @At(
+			value = "INVOKE",
+			target = "Lnet/minecraft/world/level/levelgen/WorldGenSettings;<init>(Lnet/minecraft/world/level/levelgen/WorldOptions;Lnet/minecraft/world/level/levelgen/WorldDimensions;)V"
+		),
+		index = 1,
 		require = 1,
 		allow = 1
 	)

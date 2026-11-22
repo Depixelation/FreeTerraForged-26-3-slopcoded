@@ -28,17 +28,19 @@
       "etcodehome.freeterraforged.fabric.FTFFabricClient"
     ],
     "fabric-datagen": [
-      "etcodehome.freeterraforged.fabric.FTFFabric"
+      "etcodehome.freeterraforged.fabric.FTFFabricDataGen"
     ]
   },
   "depends": {
-    "fabricloader": ">=0.14.14",
-    "fabric": ">=0.86.1",
-    "minecraft": ">=1.21.1"
+    "fabricloader": ">=0.19.5",
+    "fabric-api": ">=0.145.1",
+    "minecraft": ">=26.1",
+    "java": ">=25"
   },
   "breaks": {
     "reterraforged": "*"
   },
+  "accessWidener": "freeterraforged.accesswidener",
   "mixins": [
     "freeterraforged-common.mixins.json",
     "freeterraforged-fabric.mixins.json"

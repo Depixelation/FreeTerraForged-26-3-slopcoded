@@ -14,7 +14,7 @@ import etcodehome.freeterraforged.world.worldgen.cell.heightmap.Levels;
 import etcodehome.freeterraforged.world.worldgen.util.PosUtil;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.worldselection.WorldCreationContext;
 import net.minecraft.core.HolderGetter;
@@ -299,7 +299,7 @@ public interface IPreviewHandler {
                 }
                 throw failure;
             }
-        }, net.minecraft.Util.backgroundExecutor());
+        }, net.minecraft.util.Util.backgroundExecutor());
 
         // Stage 2: fetch/generate the tile and rasterize it, entirely on the worker pool
         state.pendingGeneration = setupStage.thenCompose(preGen -> {
@@ -335,6 +335,7 @@ public interface IPreviewHandler {
                                 : null;
                         return new FrameResult(
                                 lease, biomes, preGen.cx, preGen.cz,
+                                preGen.zoomLevel, params.zoom,
                                 preGen.properties, preGen.levels,
                                 rasterData, params.width, params.height, failure
                         );
@@ -439,6 +440,8 @@ public interface IPreviewHandler {
                     state.generatedWithBiomePipeline = biomePipeline;
                     state.centerX = result.centerX;
                     state.centerZ = result.centerZ;
+                    state.zoom = result.zoomLevel;
+                    state.zoomParam = result.zoomParam;
                     state.previewFailure = result.failure;
                     state.legendValues[3] = getSpawnCoords();
                     adopted = true;
@@ -495,7 +498,7 @@ public interface IPreviewHandler {
         state.pendingRasterization = CompletableFuture.supplyAsync(() -> {
             cancellation.check();
             return createRasterData(retained.grid(), sidecar, mode, levels, properties, params);
-        }, net.minecraft.Util.backgroundExecutor()).whenComplete((pixels, throwable) -> {
+        }, net.minecraft.util.Util.backgroundExecutor()).whenComplete((pixels, throwable) -> {
             Throwable completionFailure = throwable;
             try {
                 retained.close();
@@ -516,6 +519,7 @@ public interface IPreviewHandler {
                             && version == state.rasterRequestVersion.get() && mode == getRenderMode()) {
                         try {
                             state.previewFailure = null;
+                            state.zoomParam = params.zoom;
                             applyRasterizedPixels(pixels, params);
                         } catch (RuntimeException | LinkageError failure) {
                             state.previewFailure = PreviewFailure.log(
@@ -602,13 +606,13 @@ public interface IPreviewHandler {
         return LEGEND_SCALES[index];
     }
 
-    default void renderLegend(GuiGraphics guiGraphics, int mx, int my, Component[] labels, String[] values, int left, int top, int lineHeight, int color) {
+    default void renderLegend(GuiGraphicsExtractor guiGraphics, int mx, int my, Component[] labels, String[] values, int left, int top, int lineHeight, int color) {
         float scale = getLegendScale();
-        PoseStack pose = guiGraphics.pose();
+        org.joml.Matrix3x2fStack pose = guiGraphics.pose();
 
-        pose.pushPose();
-        pose.translate(left + 3.75F * scale, top - lineHeight * (3.2F * scale), 0);
-        pose.scale(scale, scale, 1);
+        pose.pushMatrix();
+        pose.translate(left + 3.75F * scale, top - lineHeight * (3.2F * scale));
+        pose.scale(scale, scale);
 
         Font renderer = Minecraft.getInstance().font;
         float maxWidth = (widget().getWidth() - 4) / scale;
@@ -625,17 +629,18 @@ public interface IPreviewHandler {
                 labelStr = labelStr.substring(0, labelStr.length() - 1);
             }
 
+            int argb = (color & 0xFF000000) == 0 ? (color | 0xFF000000) : color;
             for (String line : wrapLegendLine(renderer, buildLegendLine(labelStr, value), maxWidth)) {
                 int x = legendLineX(renderer, line, maxWidth);
-                guiGraphics.drawString(renderer, line, x, row++ * lineHeight, color);
+                guiGraphics.text(renderer, line, x, row++ * lineHeight, argb);
             }
         }
 
-        pose.popPose();
+        pose.popMatrix();
 
         String hoveredCoords = state().hoveredCoords;
         if (!hoveredCoords.isEmpty()) {
-            guiGraphics.drawCenteredString(renderer, hoveredCoords, mx, my - 10, 0xFFFFFF);
+            guiGraphics.centeredText(renderer, hoveredCoords, mx, my - 10, 0xFFFFFFFF);
         }
     }
 
@@ -960,6 +965,8 @@ public interface IPreviewHandler {
         final BiomePreview.Sidecar biomes;
         final int centerX;
         final int centerZ;
+        final int zoomLevel;
+        final double zoomParam;
         final WorldSettings.Properties properties;
         final Levels levels;
         final int[] rasterPayload;
@@ -974,6 +981,8 @@ public interface IPreviewHandler {
                 BiomePreview.Sidecar biomes,
                 int centerX,
                 int centerZ,
+                int zoomLevel,
+                double zoomParam,
                 WorldSettings.Properties properties,
                 Levels levels,
                 int[] rasterPayload,
@@ -986,6 +995,8 @@ public interface IPreviewHandler {
             this.biomes = biomes;
             this.centerX = centerX;
             this.centerZ = centerZ;
+            this.zoomLevel = zoomLevel;
+            this.zoomParam = zoomParam;
             this.properties = properties;
             this.levels = levels;
             this.rasterPayload = rasterPayload;

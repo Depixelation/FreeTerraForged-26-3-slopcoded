@@ -15,7 +15,7 @@ import net.minecraft.core.Holder;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceKey;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.biome.Climate;
 import net.minecraft.world.level.dimension.LevelStem;
@@ -38,10 +38,10 @@ import etcodehome.freeterraforged.world.worldgen.runtime.WorldgenPlans;
 import etcodehome.freeterraforged.world.worldgen.runtime.WorldgenQueryMode;
 
 public final class BiolithCapabilityProvider implements WorldgenCapabilityProvider {
-	private static final ResourceLocation ID = FTFCommon.location("biolith_placements");
-	private static final ResourceLocation LITHOSTITCHED = FTFCommon.location("lithostitched_injectors");
+	private static final Identifier ID = FTFCommon.location("biolith_placements");
+	private static final Identifier LITHOSTITCHED = FTFCommon.location("lithostitched_injectors");
 	private static final ResourceKey<Biome> VANILLA_PLACEHOLDER = ResourceKey.create(
-		Registries.BIOME, ResourceLocation.fromNamespaceAndPath("biolith", "vanilla")
+		Registries.BIOME, Identifier.fromNamespaceAndPath("biolith", "vanilla")
 	);
 	private static final long REPLACEMENT_SALT = 0x4A2E7C6195D3B80FL;
 	private static final Comparator<BiolithPlacementBridge.Placement> PLACEMENT_ORDER = Comparator
@@ -58,10 +58,10 @@ public final class BiolithCapabilityProvider implements WorldgenCapabilityProvid
 		.thenComparingLong(entry -> entry.point().weirdness().min())
 		.thenComparingLong(entry -> entry.point().weirdness().max())
 		.thenComparingLong(entry -> entry.point().offset())
-		.thenComparing(entry -> entry.biome().location().toString());
+		.thenComparing(entry -> entry.biome().identifier().toString());
 
 	@Override
-	public ResourceLocation id() {
+	public Identifier id() {
 		return ID;
 	}
 
@@ -151,7 +151,7 @@ public final class BiolithCapabilityProvider implements WorldgenCapabilityProvid
 			return Optional.empty();
 		}
 		String mechanismVersion = ModLoaderUtil.version("biolith").orElse("unknown");
-		if (!BiolithPlacementBridge.SUPPORTED_VERSIONS.contains(mechanismVersion)) {
+		if (!BiolithPlacementBridge.isSupportedVersion(mechanismVersion)) {
 			return Optional.of(unavailable(
 				facet,
 				"biolith_version_contract_changed",
@@ -167,7 +167,7 @@ public final class BiolithCapabilityProvider implements WorldgenCapabilityProvid
 			return Optional.empty();
 		}
 		BiolithPlacementBridge.Snapshot snapshot = found.orElseThrow();
-		if (!BiolithPlacementBridge.SUPPORTED_VERSIONS.contains(snapshot.mechanismVersion())) {
+		if (!BiolithPlacementBridge.isSupportedVersion(snapshot.mechanismVersion())) {
 			return Optional.of(unavailable(
 				facet,
 				"biolith_version_contract_changed",
@@ -176,7 +176,7 @@ public final class BiolithCapabilityProvider implements WorldgenCapabilityProvid
 					+ BiolithPlacementBridge.SUPPORTED_VERSIONS
 			));
 		}
-		Registry<Biome> biomes = context.owner().registries().registryOrThrow(Registries.BIOME);
+		Registry<Biome> biomes = context.owner().registries().lookupOrThrow(Registries.BIOME);
 		Optional<? extends WorldgenPlans.DomainPlan> result = switch (facet) {
 			case BIOME_COMPOSITION -> Optional.of(candidateComposition(snapshot, biomes));
 			case SELECTION_DECORATION -> Optional.of(replacementDecoration(
@@ -198,7 +198,7 @@ public final class BiolithCapabilityProvider implements WorldgenCapabilityProvid
 		List<Pair<Climate.ParameterPoint, Holder<Biome>>> additions = snapshot.placements().stream()
 			.sorted(PLACEMENT_ORDER)
 			.map(value -> Pair.<Climate.ParameterPoint, Holder<Biome>>of(
-				value.point(), biomes.getHolderOrThrow(value.biome())
+				value.point(), biomes.getOrThrow(value.biome())
 			))
 			.toList();
 
@@ -247,21 +247,21 @@ public final class BiolithCapabilityProvider implements WorldgenCapabilityProvid
 		}
 		Map<ResourceKey<Biome>, List<CellIntervalSelector.Choice<Holder<Biome>>>> replacementChoices = snapshot.replacements()
 			.entrySet().stream()
-			.sorted(Map.Entry.comparingByKey(Comparator.comparing(key -> key.location().toString())))
+			.sorted(Map.Entry.comparingByKey(Comparator.comparing(key -> key.identifier().toString())))
 			.collect(java.util.stream.Collectors.toUnmodifiableMap(
 				Map.Entry::getKey,
 				entry -> replacementChoices(entry.getKey(), entry.getValue(), biomes)
 			));
 		Map<ResourceKey<Biome>, List<BiolithPlacementBridge.SubBiome>> subBiomes = snapshot.subBiomes()
 			.entrySet().stream()
-			.sorted(Map.Entry.comparingByKey(Comparator.comparing(key -> key.location().toString())))
+			.sorted(Map.Entry.comparingByKey(Comparator.comparing(key -> key.identifier().toString())))
 			.collect(java.util.stream.Collectors.toUnmodifiableMap(
 				Map.Entry::getKey,
 				entry -> entry.getValue().stream()
 					.map(value -> new BiolithPlacementBridge.SubBiome(
 						value.target(), value.biome(), value.criterion().bindTags(biomes), value.fromData()
 					))
-					.sorted(Comparator.comparing(value -> value.biome().location().toString()))
+					.sorted(Comparator.comparing(value -> value.biome().identifier().toString()))
 					.toList()
 			));
 		Set<Holder<Biome>> possibleOutputs = replacementChoices.values().stream()
@@ -270,7 +270,7 @@ public final class BiolithCapabilityProvider implements WorldgenCapabilityProvid
 			.collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
 		subBiomes.values().stream().flatMap(List::stream)
 			.map(BiolithPlacementBridge.SubBiome::biome)
-			.map(biomes::getHolderOrThrow)
+			.map(biomes::getOrThrow)
 			.forEach(possibleOutputs::add);
 		long seed = context.owner().seed();
 		Map<ResourceKey<Biome>, CellIntervalSelector<Holder<Biome>>> replacements = replacementChoices
@@ -308,7 +308,7 @@ public final class BiolithCapabilityProvider implements WorldgenCapabilityProvid
 					BiolithCriterionBridge.Evaluation evaluation = new BiolithCriterionBridge.Evaluation(
 						selection, target, quartY, minY, topY, seaLevel,
 						alternate -> replacement(
-							biomes.getHolderOrThrow(alternate), replacementSample, replacements
+							biomes.getOrThrow(alternate), replacementSample, replacements
 						).biome(),
 						direct.context()
 					);
@@ -316,7 +316,7 @@ public final class BiolithCapabilityProvider implements WorldgenCapabilityProvid
 						if (BiolithCriterionBridge.matches(
 							request.criterion().node().orElseThrow(), evaluation
 						)) {
-							return biomes.getHolderOrThrow(request.biome());
+							return biomes.getOrThrow(request.biome());
 						}
 					}
 					return direct.biome();
@@ -359,7 +359,7 @@ public final class BiolithCapabilityProvider implements WorldgenCapabilityProvid
 		List<BiolithPlacementBridge.Replacement> ordered = requests.stream()
 			.filter(request -> request.proportion() > 0.0D)
 			.sorted(Comparator
-				.comparing((BiolithPlacementBridge.Replacement request) -> request.biome().location().toString())
+				.comparing((BiolithPlacementBridge.Replacement request) -> request.biome().identifier().toString())
 				.thenComparingDouble(BiolithPlacementBridge.Replacement::proportion))
 			.toList();
 		List<CellIntervalSelector.Choice<Holder<Biome>>> choices = new java.util.ArrayList<>(
@@ -367,7 +367,7 @@ public final class BiolithCapabilityProvider implements WorldgenCapabilityProvid
 		);
 		if (baseWeight > 0.0D) {
 			choices.add(new CellIntervalSelector.Choice<>(
-				choiceId("vanilla", target, baseWeight), baseWeight, biomes.getHolderOrThrow(target)
+				choiceId("vanilla", target, baseWeight), baseWeight, biomes.getOrThrow(target)
 			));
 		}
 		for (BiolithPlacementBridge.Replacement request : ordered) {
@@ -377,18 +377,18 @@ public final class BiolithCapabilityProvider implements WorldgenCapabilityProvid
 			choices.add(new CellIntervalSelector.Choice<>(
 				choiceId("request", request.biome(), request.proportion()),
 				request.proportion(),
-				biomes.getHolderOrThrow(output)
+				biomes.getOrThrow(output)
 			));
 		}
 		return List.copyOf(choices);
 	}
 
-	private static ResourceLocation choiceId(
+	private static Identifier choiceId(
 		String kind,
 		ResourceKey<Biome> biome,
 		double weight
 	) {
-		ResourceLocation location = biome.location();
+		Identifier location = biome.identifier();
 		return FTFCommon.location(
 			"biolith/replacement/" + kind + "/" + location.getNamespace() + "/"
 				+ location.getPath() + "/"

@@ -79,7 +79,7 @@ public class MixinOceanMonumentStructure {
 
 	@Unique
 	private static int ftf$sampleHighestOceanFloor(Structure.GenerationContext context, BoundingBox box) {
-		int highest = context.heightAccessor().getMinBuildHeight();
+		int highest = context.heightAccessor().getMinY();
 		for (int ix = 0; ix <= ftf$FOOTPRINT_SAMPLE_STEPS; ix++) {
 			int x = ftf$sampleCoord(box.minX(), box.maxX(), ix);
 			for (int iz = 0; iz <= ftf$FOOTPRINT_SAMPLE_STEPS; iz++) {

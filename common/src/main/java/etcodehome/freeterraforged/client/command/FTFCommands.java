@@ -52,7 +52,7 @@ public class FTFCommands {
 
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(Commands.literal("ftf")
-                .requires(s -> s.hasPermission(2))
+                .requires(Commands.hasPermission(Commands.LEVEL_GAMEMASTERS))
                 .then(Commands.literal("heightmap")
                         .then(Commands.literal("area")
                                 .then(Commands.argument("x1", IntegerArgumentType.integer())
@@ -77,7 +77,7 @@ public class FTFCommands {
                                             ServerPlayer player = source.getPlayer();
                                             ServerLevel serverLevel = deduceServerLevel(source);
                                             BlockPos center = player != null ? player.blockPosition() :
-                                                    (source.getEntity() != null ? source.getEntity().blockPosition() : serverLevel.getSharedSpawnPos());
+                                                    (source.getEntity() != null ? source.getEntity().blockPosition() : serverLevel.getRespawnData().pos());
 
                                             int z1 = center.getZ() + blocks;
                                             int x1 = center.getX() + blocks;
@@ -112,7 +112,7 @@ public class FTFCommands {
                                             ServerPlayer player = source.getPlayer();
                                             ServerLevel serverLevel = deduceServerLevel(source);
                                             BlockPos center = player != null ? player.blockPosition() :
-                                                    (source.getEntity() != null ? source.getEntity().blockPosition() : serverLevel.getSharedSpawnPos());
+                                                    (source.getEntity() != null ? source.getEntity().blockPosition() : serverLevel.getRespawnData().pos());
 
                                             int z1 = center.getZ() + blocks;
                                             int x1 = center.getX() + blocks;
@@ -193,7 +193,7 @@ public class FTFCommands {
         if (player == null) {
             return source.getServer().overworld();
         }
-        return (ServerLevel) player.getCommandSenderWorld();
+        return (ServerLevel) player.level();
     }
 
     private static void startHeightmapProcess(CommandContext<CommandSourceStack> context,
@@ -336,8 +336,8 @@ public class FTFCommands {
                 .withStyle(style -> style
                         .withColor(ChatFormatting.AQUA)
                         .withUnderlined(true)
-                        .withClickEvent(new ClickEvent(ClickEvent.Action.OPEN_FILE, absPath))
-                        .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, Component.literal("Click to open: " + absPath)))
+                        .withClickEvent(new ClickEvent.OpenFile(imageFile))
+                        .withHoverEvent(new HoverEvent.ShowText(Component.literal("Click to open: " + absPath)))
                 );
 
         context.getSource().sendSystemMessage(

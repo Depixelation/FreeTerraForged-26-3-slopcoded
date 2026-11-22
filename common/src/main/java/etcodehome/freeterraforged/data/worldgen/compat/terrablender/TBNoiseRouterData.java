@@ -5,11 +5,11 @@ import etcodehome.freeterraforged.world.worldgen.densityfunction.FTFDensityFunct
 import net.minecraft.core.registries.Registries;
 import net.minecraft.data.worldgen.BootstrapContext;
 import net.minecraft.resources.ResourceKey;
-import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.level.levelgen.DensityFunction;
+import net.minecraft.resources.Identifier;
+import net.minecraft.world.level.levelgen.densityfunction.DensityFunction;
 
 public class TBNoiseRouterData {
-	public static final ResourceKey<DensityFunction> UNIQUENESS =ResourceKey.create(Registries.DENSITY_FUNCTION, ResourceLocation.fromNamespaceAndPath("terrablender","uniqueness"));
+	public static final ResourceKey<DensityFunction> UNIQUENESS =ResourceKey.create(Registries.DENSITY_FUNCTION, Identifier.fromNamespaceAndPath("terrablender","uniqueness"));
 	
 	public static void bootstrap(BootstrapContext<DensityFunction> ctx) {
 		ctx.register(UNIQUENESS, FTFDensityFunctions.cell(CellSampler.Field.BIOME_REGION));

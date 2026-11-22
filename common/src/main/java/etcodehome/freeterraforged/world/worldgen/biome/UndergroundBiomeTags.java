@@ -2,7 +2,7 @@ package etcodehome.freeterraforged.world.worldgen.biome;
 
 import net.minecraft.core.Holder;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.biome.Biomes;
@@ -23,10 +23,10 @@ public final class UndergroundBiomeTags {
 		@SuppressWarnings("unchecked")
 		Holder<Biome> holder = (Holder<Biome>) rawHolder;
 		return holder.is(IS_CAVE) || holder.is(IS_UNDERGROUND) || holder.is(CAVES)
-			|| holder.is(Biomes.LUSH_CAVES) || holder.is(Biomes.DRIPSTONE_CAVES) || holder.is(Biomes.DEEP_DARK);
+			|| holder.is(Biomes.LUSH_CAVES) || holder.is(Biomes.DRIPSTONE_CAVES) || holder.is(Biomes.SULFUR_CAVES) || holder.is(Biomes.DEEP_DARK);
 	}
 
 	private static TagKey<Biome> common(String path) {
-		return TagKey.create(Registries.BIOME, ResourceLocation.fromNamespaceAndPath("c", path));
+		return TagKey.create(Registries.BIOME, Identifier.fromNamespaceAndPath("c", path));
 	}
 }

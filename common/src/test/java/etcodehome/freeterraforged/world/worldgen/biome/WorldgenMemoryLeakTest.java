@@ -39,9 +39,13 @@ class WorldgenMemoryLeakTest {
 		);
 	}
 
+	private static Climate.Sampler emptySampler() {
+		return new Climate.Sampler(null, null, null, null, null, null);
+	}
+
 	@Test
 	void testCoverageFactorDoesNotRetainSamplerStrongly() throws Exception {
-		Climate.Sampler[] samplerHolder = new Climate.Sampler[]{ Climate.empty() };
+		Climate.Sampler[] samplerHolder = new Climate.Sampler[]{ emptySampler() };
 		WeakReference<Climate.Sampler> samplerRef = new WeakReference<>(samplerHolder[0]);
 
 		Climate.TargetPoint target = Climate.target(0.0F, 0.0F, 0.0F, -0.5F, 1.5F, 0.0F);
@@ -164,7 +168,7 @@ class WorldgenMemoryLeakTest {
 			value -> value.contains("caves") || value.contains("dark")
 		);
 
-		Climate.Sampler sampler = Climate.empty();
+		Climate.Sampler sampler = emptySampler();
 		Climate.TargetPoint target = Climate.target(0.0F, 0.0F, 0.0F, -0.5F, 1.5F, 0.0F);
 
 		int threadCount = Math.max(4, Runtime.getRuntime().availableProcessors());

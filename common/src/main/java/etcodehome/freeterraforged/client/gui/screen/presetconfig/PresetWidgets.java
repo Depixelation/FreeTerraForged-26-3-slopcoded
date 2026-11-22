@@ -112,11 +112,11 @@ final class PresetWidgets {
 	public static <T> CycleButton<T> createCycle(Collection<T> values, T initial, Optional<String> text, CycleButton.OnValueChange<T> callback, Function<T, String> name) {
 		CycleButton.Builder<T> builder = CycleButton.<T>builder((e) -> {
 			return Component.literal(name.apply(e));
-		}).withInitialValue(initial).withValues(values);
+		}, initial).withValues(values);
 		if(text.isEmpty()) {
 			builder = builder.displayOnlyValue();
 		}
-		CycleButton<T> button = builder.create(-1, -1, -1, -1, text.map(Component::translatable).orElse(null), callback);
+		CycleButton<T> button = builder.create(-1, -1, -1, -1, text.map(Component::translatable).orElseGet(Component::empty), callback);
 		text.ifPresent((key) -> {
 			button.setTooltip(Tooltips.create(Tooltips.translationKey(key)));
 		});
@@ -124,7 +124,7 @@ final class PresetWidgets {
 	}
 
 	public static CycleButton<Boolean> createToggle(boolean initial, String text, CycleButton.OnValueChange<Boolean> callback) {
-		CycleButton<Boolean> button = CycleButton.booleanBuilder(Component.translatable(FTFTranslationKeys.GUI_BUTTON_TRUE), Component.translatable(FTFTranslationKeys.GUI_BUTTON_FALSE)).withInitialValue(initial).create(-1, -1, -1, -1, Component.translatable(text), callback);
+		CycleButton<Boolean> button = CycleButton.booleanBuilder(Component.translatable(FTFTranslationKeys.GUI_BUTTON_TRUE), Component.translatable(FTFTranslationKeys.GUI_BUTTON_FALSE), initial).create(-1, -1, -1, -1, Component.translatable(text), callback);
 		button.setTooltip(Tooltips.create(Tooltips.translationKey(text)));
 		return button;
 	}
@@ -137,9 +137,9 @@ final class PresetWidgets {
 	) {
 		CycleButton<Boolean> button = CycleButton.booleanBuilder(
 						Component.translatable(FTFTranslationKeys.GUI_BUTTON_TRUE),
-						Component.translatable(FTFTranslationKeys.GUI_BUTTON_FALSE)
+						Component.translatable(FTFTranslationKeys.GUI_BUTTON_FALSE),
+						initial
 				)
-				.withInitialValue(initial)
 				.create(
 						-1, -1, -1, -1,
 						Component.translatable(setting.resolvedToken),

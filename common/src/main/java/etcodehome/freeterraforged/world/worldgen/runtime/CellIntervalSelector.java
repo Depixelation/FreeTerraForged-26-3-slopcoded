@@ -6,7 +6,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 
 public final class CellIntervalSelector<T> {
 	private final long salt;
@@ -23,7 +23,7 @@ public final class CellIntervalSelector<T> {
 		if (ordered.isEmpty()) {
 			throw new IllegalArgumentException("Cannot prepare an empty weighted interval set");
 		}
-		Set<ResourceLocation> ids = new HashSet<>();
+		Set<Identifier> ids = new HashSet<>();
 		if (ordered.stream().anyMatch(choice -> !ids.add(choice.id()))) {
 			throw new IllegalArgumentException("Weighted interval IDs must be unique");
 		}
@@ -78,7 +78,7 @@ public final class CellIntervalSelector<T> {
 	private record Entry<T>(Choice<T> choice, double start, double end) {
 	}
 
-	public record Choice<T>(ResourceLocation id, double weight, T value) {
+	public record Choice<T>(Identifier id, double weight, T value) {
 		public Choice {
 			id = Objects.requireNonNull(id, "id");
 			if (!Double.isFinite(weight) || weight <= 0.0D) {

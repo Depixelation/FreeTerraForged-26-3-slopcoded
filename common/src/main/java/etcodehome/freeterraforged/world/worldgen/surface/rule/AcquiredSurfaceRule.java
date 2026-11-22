@@ -5,14 +5,15 @@ import com.mojang.serialization.Codec;
 import com.mojang.serialization.DataResult;
 import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
-import net.minecraft.util.KeyDispatchDataCodec;
-import net.minecraft.world.level.levelgen.SurfaceRules;
+import net.minecraft.world.level.levelgen.material.MaterialRuleContext;
+import net.minecraft.world.level.levelgen.material.rule.MaterialRule;
+import net.minecraft.world.level.levelgen.material.rule.RuleEvaluator;
 
-public record AcquiredSurfaceRule(SurfaceRules.RuleSource root, List<Source> sources, List<String> failures)
-	implements SurfaceRules.RuleSource {
+public record AcquiredSurfaceRule(MaterialRule root, List<Source> sources, List<String> failures)
+	implements MaterialRule {
 	public static final String TYPE = "freeterraforged:acquired_surface";
 	public static final MapCodec<AcquiredSurfaceRule> CODEC = RecordCodecBuilder.<AcquiredSurfaceRule>mapCodec(instance -> instance.group(
-		SurfaceRules.RuleSource.CODEC.fieldOf("root").forGetter(AcquiredSurfaceRule::root),
+		MaterialRule.CODEC.fieldOf("root").forGetter(AcquiredSurfaceRule::root),
 		Source.CODEC.listOf().fieldOf("sources").forGetter(AcquiredSurfaceRule::sources),
 		Codec.STRING.listOf().optionalFieldOf("failures", List.of()).forGetter(AcquiredSurfaceRule::failures)
 	).apply(instance, AcquiredSurfaceRule::new)).flatXmap(DataResult::success,
@@ -24,14 +25,14 @@ public record AcquiredSurfaceRule(SurfaceRules.RuleSource root, List<Source> sou
 	}
 
 	@Override
-	public SurfaceRules.SurfaceRule apply(SurfaceRules.Context context) {
+	public RuleEvaluator compile(MaterialRuleContext context) {
 		if (!this.failures.isEmpty()) throw new IllegalStateException(String.join("; ", this.failures));
-		return this.root.apply(context);
+		return this.root.compile(context);
 	}
 
 	@Override
-	public KeyDispatchDataCodec<AcquiredSurfaceRule> codec() {
-		return new KeyDispatchDataCodec<>(CODEC);
+	public MapCodec<AcquiredSurfaceRule> codec() {
+		return CODEC;
 	}
 
 	public record Source(String resource, String pack, int priority, String fingerprint, String operation, List<String> biomes) {

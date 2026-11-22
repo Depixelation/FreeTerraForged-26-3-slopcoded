@@ -19,8 +19,8 @@ import net.minecraft.world.level.biome.MultiNoiseBiomeSource;
 import net.minecraft.world.level.chunk.ChunkGenerator;
 import net.minecraft.world.level.dimension.DimensionType;
 import net.minecraft.world.level.dimension.LevelStem;
-import net.minecraft.world.level.levelgen.DensityFunctions;
-import net.minecraft.world.level.levelgen.DensityFunction;
+import net.minecraft.world.level.levelgen.densityfunction.DensityFunctions;
+import net.minecraft.world.level.levelgen.densityfunction.DensityFunction;
 import net.minecraft.world.level.levelgen.NoiseBasedChunkGenerator;
 import net.minecraft.world.level.levelgen.NoiseGeneratorSettings;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.Preset;
@@ -213,13 +213,12 @@ public final class BiomePreviewResolver implements AutoCloseable {
 			);
 			Climate.Sampler sampler = decorateSampler(
 				new Climate.Sampler(
-					cell(generatorContext, CellSampler.Field.TEMPERATURE),
-					cell(generatorContext, CellSampler.Field.MOISTURE),
-					cell(generatorContext, CellSampler.Field.CONTINENT),
-					cell(generatorContext, CellSampler.Field.EROSION),
-					DensityFunctions.constant(0.0D),
-					cell(generatorContext, CellSampler.Field.WEIRDNESS),
-					noiseSettings.value().spawnTarget()
+					cell(generatorContext, CellSampler.Field.TEMPERATURE).bind(),
+					cell(generatorContext, CellSampler.Field.MOISTURE).bind(),
+					cell(generatorContext, CellSampler.Field.CONTINENT).bind(),
+					cell(generatorContext, CellSampler.Field.EROSION).bind(),
+					etcodehome.freeterraforged.world.worldgen.densityfunction.MarkerFunction.constantBound(0.0F),
+					cell(generatorContext, CellSampler.Field.WEIRDNESS).bind()
 				),
 				preset,
 				generatorContext,
@@ -262,7 +261,7 @@ public final class BiomePreviewResolver implements AutoCloseable {
 		}
 	}
 
-	private static DensityFunction cell(GeneratorContext context, CellSampler.Field field) {
+	private static etcodehome.freeterraforged.world.worldgen.densityfunction.MarkerFunction cell(GeneratorContext context, CellSampler.Field field) {
 		return new CellSampler(() -> context.lookup, field);
 	}
 
@@ -407,13 +406,12 @@ public final class BiomePreviewResolver implements AutoCloseable {
 			tile, this.generatorContext.lookup, originX, originZ, zoom
 		);
 		Climate.Sampler sampler = new Climate.Sampler(
-			new PreviewTileClimateSampler(tileLookup, heightmap, CellSampler.Field.TEMPERATURE),
-			new PreviewTileClimateSampler(tileLookup, heightmap, CellSampler.Field.MOISTURE),
-			new PreviewTileClimateSampler(tileLookup, heightmap, CellSampler.Field.CONTINENT),
-			new PreviewTileClimateSampler(tileLookup, heightmap, CellSampler.Field.EROSION),
-			DensityFunctions.constant(0.0D),
-			new PreviewTileClimateSampler(tileLookup, heightmap, CellSampler.Field.WEIRDNESS),
-			this.generator.generatorSettings().value().spawnTarget()
+			new PreviewTileClimateSampler(tileLookup, heightmap, CellSampler.Field.TEMPERATURE).bind(),
+			new PreviewTileClimateSampler(tileLookup, heightmap, CellSampler.Field.MOISTURE).bind(),
+			new PreviewTileClimateSampler(tileLookup, heightmap, CellSampler.Field.CONTINENT).bind(),
+			new PreviewTileClimateSampler(tileLookup, heightmap, CellSampler.Field.EROSION).bind(),
+			etcodehome.freeterraforged.world.worldgen.densityfunction.MarkerFunction.constantBound(0.0F),
+			new PreviewTileClimateSampler(tileLookup, heightmap, CellSampler.Field.WEIRDNESS).bind()
 		);
 		return new TileBiomeRequest(
 			tileLookup,

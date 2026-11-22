@@ -23,18 +23,20 @@ import etcodehome.freeterraforged.world.worldgen.surface.rule.InheritedSurfaceRu
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.FileToIdConverter;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.resources.RegistryOps;
+import net.minecraft.server.packs.PackResources;
 import net.minecraft.server.packs.resources.Resource;
 import net.minecraft.server.packs.resources.ResourceManager;
-import net.minecraft.world.level.levelgen.SurfaceRules;
+import net.minecraft.world.level.levelgen.material.rule.MaterialRule;
 
 public final class WorldgenSurfaceInputs {
 	private WorldgenSurfaceInputs() {}
 
-	public static Resource acquire(ResourceManager manager, ResourceLocation settingsId, Resource selected) throws IOException {
+	public static Resource acquire(ResourceManager manager, Identifier settingsId, Resource selected) throws IOException {
 		JsonObject settings = readSettings(selected);
-		JsonElement surface = settings.get("surface_rule");
+		String fieldName = settings.has("material_rule") ? "material_rule" : "surface_rule";
+		JsonElement surface = settings.get(fieldName);
 		if (surface == null || !containsMarker(surface)) return selected;
 		var file = FileToIdConverter.json(Registries.elementsDirPath(Registries.NOISE_SETTINGS)).idToFile(settingsId);
 		var layers = manager.getResourceStack(file);
@@ -50,18 +52,72 @@ public final class WorldgenSurfaceInputs {
 		IntFunction<Layer> lowerRule = index -> cache.computeIfAbsent(index, ignored -> {
 			Resource layer = layers.get(index);
 			try {
-				JsonElement rule = readSettings(layer).get("surface_rule");
-				if (rule == null) throw new IllegalStateException("Missing surface_rule");
+				JsonObject layerSettings = readSettings(layer);
+				JsonElement rule = layerSettings.has("material_rule") ? layerSettings.get("material_rule") : layerSettings.get("surface_rule");
+				if (rule == null) throw new IllegalStateException("Missing material_rule/surface_rule");
+				JsonElement expanded = expandRegistryReferences(manager, layer.source(), rule, false, new HashMap<>());
 				return new Layer(settingsId.toString(), layer.sourcePackId(), index,
-					ResourcePackUtil.isBundledModPack(layer.source()), rule.toString());
+					ResourcePackUtil.isBundledModPack(layer.source()), expanded.toString());
 			} catch (IOException | RuntimeException failure) {
 				throw new IllegalStateException("Cannot acquire surface input " + settingsId + " from pack " + layer.sourcePackId(), failure);
 			}
 		});
-		settings.add("surface_rule", normalizeLayers(surface, lowerRule,
+		JsonElement expandedSelected = expandRegistryReferences(manager, selected.source(), surface, false, new HashMap<>());
+		settings.add(fieldName, normalizeLayers(expandedSelected, lowerRule,
 			index -> ResourcePackUtil.isBundledModPack(layers.get(index).source()), selectedIndex - 1));
 		byte[] bytes = settings.toString().getBytes(StandardCharsets.UTF_8);
 		return new Resource(selected.source(), () -> new ByteArrayInputStream(bytes), selected::metadata);
+	}
+
+	private static JsonElement expandRegistryReferences(
+		ResourceManager manager,
+		PackResources preferredPack,
+		JsonElement element,
+		boolean isCondition,
+		HashMap<String, JsonElement> memo
+	) throws IOException {
+		if (element == null) return null;
+		if (element.isJsonPrimitive() && element.getAsJsonPrimitive().isString()) {
+			Identifier id = Identifier.parse(element.getAsString());
+			String cacheKey = (isCondition ? "cond:" : "rule:") + id;
+			JsonElement cached = memo.get(cacheKey);
+			if (cached != null) return cached.deepCopy();
+			var dir = Registries.elementsDirPath(isCondition ? Registries.MATERIAL_CONDITION : Registries.MATERIAL_RULE);
+			Identifier file = FileToIdConverter.json(dir).idToFile(id);
+			List<Resource> stack = manager.getResourceStack(file);
+			if (stack.isEmpty()) return element.deepCopy();
+			Resource target = stack.getFirst();
+			for (int i = stack.size() - 1; i >= 0; i--) {
+				if (stack.get(i).source() == preferredPack) {
+					target = stack.get(i);
+					break;
+				}
+			}
+			JsonElement parsed = expandRegistryReferences(manager, target.source(), readSettings(target), isCondition, memo);
+			memo.put(cacheKey, parsed);
+			return parsed.deepCopy();
+		}
+		if (!element.isJsonObject()) return element.deepCopy();
+		JsonObject obj = element.getAsJsonObject();
+		JsonObject out = new JsonObject();
+		for (var entry : obj.entrySet()) {
+			String key = entry.getKey();
+			JsonElement val = entry.getValue();
+			if ("sequence".equals(key) && val.isJsonArray()) {
+				JsonArray arr = new JsonArray();
+				for (JsonElement child : val.getAsJsonArray()) {
+					arr.add(expandRegistryReferences(manager, preferredPack, child, false, memo));
+				}
+				out.add(key, arr);
+			} else if ("then_run".equals(key) || "fallback".equals(key) || "root".equals(key)) {
+				out.add(key, expandRegistryReferences(manager, preferredPack, val, false, memo));
+			} else if ("if_true".equals(key) || "invert".equals(key)) {
+				out.add(key, expandRegistryReferences(manager, preferredPack, val, true, memo));
+			} else {
+				out.add(key, val.deepCopy());
+			}
+		}
+		return out;
 	}
 
 	public record Layer(String resource, String pack, int priority, boolean bundled, String rule) {}
@@ -140,10 +196,10 @@ public final class WorldgenSurfaceInputs {
 		return result;
 	}
 
-	public static void requireSupported(SurfaceRules.RuleSource root, RegistryAccess registries) {
+	public static void requireSupported(MaterialRule root, RegistryAccess registries) {
 		// AcquiredSurfaceRule's encoder rejects actual failed snapshots. Opaque codec payloads
 		// resembling our JSON are data, not executable rules, and must not be interpreted here.
-		SurfaceRules.RuleSource.CODEC.encodeStart(RegistryOps.create(JsonOps.INSTANCE, registries), root).getOrThrow();
+		MaterialRule.DIRECT_CODEC.encodeStart(RegistryOps.create(JsonOps.INSTANCE, registries), root).getOrThrow();
 	}
 
 	public static void validate(JsonElement value) {
@@ -196,7 +252,7 @@ public final class WorldgenSurfaceInputs {
 		if (!value.isJsonObject()) return "";
 		JsonElement type = value.getAsJsonObject().get("type");
 		if (type == null || !type.isJsonPrimitive() || !type.getAsJsonPrimitive().isString()) return "";
-		return switch (ResourceLocation.parse(type.getAsString()).toString()) {
+		return switch (Identifier.parse(type.getAsString()).toString()) {
 			case "minecraft:sequence" -> "sequence";
 			case "minecraft:condition" -> "then_run";
 			case AcquiredSurfaceRule.TYPE -> "root";

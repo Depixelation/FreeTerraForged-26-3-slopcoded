@@ -13,14 +13,22 @@ import com.terraformersmc.biolith.impl.biome.BiomeCoordinator;
 import com.terraformersmc.biolith.impl.biome.DimensionBiomePlacement;
 
 import net.minecraft.resources.ResourceKey;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.biome.Climate;
 import net.minecraft.world.level.dimension.LevelStem;
 import etcodehome.freeterraforged.platform.ModLoaderUtil;
 
 public final class BiolithPlacementBridge {
-	public static final Set<String> SUPPORTED_VERSIONS = Set.of("3.0.11", "3.0.14");
+	public static final Set<String> SUPPORTED_VERSIONS = Set.of(
+		"3.0.11", "3.0.14", "3.8.0-beta.1", "3.8.0-beta.2", "3.9.0-alpha.4"
+	);
+
+	public static boolean isSupportedVersion(String version) {
+		if (version == null) return false;
+		if (SUPPORTED_VERSIONS.contains(version)) return true;
+		return version.startsWith("3.8.") || version.startsWith("3.9.");
+	}
 	private static final Map<Dimension, Collector> COLLECTORS = new EnumMap<>(Dimension.class);
 
 	static {
@@ -118,21 +126,21 @@ public final class BiolithPlacementBridge {
 	}
 
 	public enum Dimension {
-		OVERWORLD(ResourceLocation.withDefaultNamespace("overworld")),
-		NETHER(ResourceLocation.withDefaultNamespace("the_nether")),
-		END(ResourceLocation.withDefaultNamespace("the_end"));
+		OVERWORLD(Identifier.withDefaultNamespace("overworld")),
+		NETHER(Identifier.withDefaultNamespace("the_nether")),
+		END(Identifier.withDefaultNamespace("the_end"));
 
-		private final ResourceLocation location;
+		private final Identifier location;
 
-		Dimension(ResourceLocation location) {
+		Dimension(Identifier location) {
 			this.location = location;
 		}
 
 		static Optional<Dimension> fromStem(ResourceKey<LevelStem> stem) {
-			return java.util.Arrays.stream(values()).filter(value -> value.location.equals(stem.location())).findFirst();
+			return java.util.Arrays.stream(values()).filter(value -> value.location.equals(stem.identifier())).findFirst();
 		}
 
-		public ResourceLocation location() {
+		public Identifier location() {
 			return this.location;
 		}
 	}
@@ -157,7 +165,7 @@ public final class BiolithPlacementBridge {
 		BiolithCriterionBridge.Snapshot criterion,
 		boolean fromData
 	) {
-		public ResourceLocation criterionType() {
+		public Identifier criterionType() {
 			return this.criterion.type();
 		}
 

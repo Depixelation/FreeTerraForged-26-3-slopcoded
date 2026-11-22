@@ -3,10 +3,10 @@ package etcodehome.freeterraforged.world.worldgen.runtime;
 import java.util.Objects;
 import java.util.Optional;
 
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 
 public record PlanDescriptor(
-	ResourceLocation id,
+	Identifier id,
 	WorldgenFacet facet,
 	CapabilityState state,
 	String mechanism,

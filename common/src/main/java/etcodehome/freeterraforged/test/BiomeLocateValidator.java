@@ -29,6 +29,7 @@ import net.minecraft.tags.BiomeTags;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.biome.Biomes;
 import net.minecraft.world.level.levelgen.RandomState;
+import net.minecraft.world.level.levelgen.densityfunction.SamplerContext;
 
 /** Live-plan smoke benchmark for the chunk-free biome locator. */
 public final class BiomeLocateValidator {
@@ -58,13 +59,13 @@ public final class BiomeLocateValidator {
 			}
 		};
 
-		BlockPos origin = level.getSharedSpawnPos();
+		BlockPos origin = level.getRespawnData().pos();
 		String authoritativeSampling = LocateSearchValidator.validateAuthoritativeSampling(
 			state.generatorContext(), origin.getX(), origin.getZ()
 		);
 		FTFCommon.LOGGER.info("[FTF-Test] Locate filtered-sampling validation: {}", authoritativeSampling);
 		FTFBiomeLocateQuery query = new FTFBiomeLocateQuery(
-			runtime.selection(), state.generatorContext(), randomState.sampler(),
+			runtime.selection(), state.generatorContext(), randomState.createClimateSampler(SamplerContext.EMPTY_UNCACHED),
 			runtime.placement(), valid
 		);
 		Holder<Biome> cherryGrove = level.registryAccess().lookupOrThrow(Registries.BIOME)
@@ -173,7 +174,7 @@ public final class BiomeLocateValidator {
 			);
 		}
 		String rawOptimization = LocateSearchValidator.validateRawBiomeOptimization(
-			state.generatorContext(), runtime.selection(), randomState.sampler(), origin.getX(), origin.getZ()
+			state.generatorContext(), runtime.selection(), randomState.createClimateSampler(SamplerContext.EMPTY_UNCACHED), origin.getX(), origin.getZ()
 		);
 		FTFCommon.LOGGER.info("[FTF-Test] Locate raw-equivalence validation: {}", rawOptimization);
 		return new Result(
@@ -354,7 +355,7 @@ public final class BiomeLocateValidator {
 	}
 
 	private static String biomeName(Holder<Biome> biome) {
-		return biome.unwrapKey().map(key -> key.location().toString()).orElse("<unregistered>");
+		return biome.unwrapKey().map(key -> key.identifier().toString()).orElse("<unregistered>");
 	}
 
 	private static void assertFinishedChunkBiome(

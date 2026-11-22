@@ -94,7 +94,10 @@ public class ChunkFlowField {
 
     public void readFromNbt(CompoundTag tag) {
         if (tag.contains(FLOW_FIELD_KEY)) {
-            byte[] read = tag.getByteArray(FLOW_FIELD_KEY);
+            byte[] read = tag.getByteArray(FLOW_FIELD_KEY).orElse(null);
+            if (read == null) {
+                return;
+            }
             System.arraycopy(read, 0, this.flowGrid, 0, Math.min(read.length, 256));
             this.hasRivers = false;
             for (byte b : this.flowGrid) {

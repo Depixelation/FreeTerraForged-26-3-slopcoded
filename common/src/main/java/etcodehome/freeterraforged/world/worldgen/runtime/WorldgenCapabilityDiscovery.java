@@ -18,7 +18,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import etcodehome.freeterraforged.platform.ModLoaderUtil;
 
 public final class WorldgenCapabilityDiscovery {
@@ -93,11 +93,11 @@ public final class WorldgenCapabilityDiscovery {
 			));
 		}
 
-		Map<ResourceLocation, List<Parsed>> byId = new HashMap<>();
+		Map<Identifier, List<Parsed>> byId = new HashMap<>();
 		parsed.forEach(value -> byId.computeIfAbsent(value.metadata().id(), ignored -> new ArrayList<>()).add(value));
 		List<WorldgenProviderCatalog.Registration> registrations = new ArrayList<>();
 		List<WorldgenProviderCatalog.FailedProvider> rejected = new ArrayList<>();
-		for (Map.Entry<ResourceLocation, List<Parsed>> entry : byId.entrySet()) {
+		for (Map.Entry<Identifier, List<Parsed>> entry : byId.entrySet()) {
 			if (entry.getValue().size() == 1) {
 				registrations.add(new WorldgenProviderCatalog.Registration(
 					entry.getValue().getFirst().metadata()
@@ -136,7 +136,7 @@ public final class WorldgenCapabilityDiscovery {
 				throw new IllegalArgumentException("Unknown provider metadata key: " + key);
 			}
 		}
-		ResourceLocation id = ResourceLocation.parse(string(value, "id"));
+		Identifier id = Identifier.parse(string(value, "id"));
 		int protocol = integer(value, "protocol_version");
 		int adapter = integer(value, "adapter_version");
 		String implementation = string(value, "implementation");
@@ -168,8 +168,8 @@ public final class WorldgenCapabilityDiscovery {
 			JsonObject order = object(element, "ordering entry");
 			requireKeys(order, Set.of("before", "after", "required"), "ordering entry");
 			ordering.add(new ProviderOrder(
-				ResourceLocation.parse(string(order, "before")),
-				ResourceLocation.parse(string(order, "after")),
+				Identifier.parse(string(order, "before")),
+				Identifier.parse(string(order, "after")),
 				optionalBoolean(order, "required", true)
 			));
 		}

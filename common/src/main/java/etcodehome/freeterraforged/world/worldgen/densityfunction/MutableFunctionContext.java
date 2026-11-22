@@ -1,6 +1,6 @@
 package etcodehome.freeterraforged.world.worldgen.densityfunction;
 
-import net.minecraft.world.level.levelgen.DensityFunction.FunctionContext;
+import etcodehome.freeterraforged.world.worldgen.densityfunction.MarkerFunction.FunctionContext;
 
 public class MutableFunctionContext implements FunctionContext {
 	private int blockX, blockY, blockZ;

@@ -36,7 +36,7 @@ public class RuntimeRegistryExporter implements DataProvider {
         List<CompletableFuture<?>> futures = new ArrayList<>();
 
         // Iterate over standard data-driven registries (biomes, configured features, etc.)
-        for (RegistryDataLoader.RegistryData<?> registryData : RegistryDataLoader.WORLDGEN_REGISTRIES) {
+        for (RegistryDataLoader.RegistryData<?> registryData : RegistryDataLoader.WORLD_REGISTRIES) {
             dumpRegistry(cache, pureOps, registryData, futures);
         }
 
@@ -44,7 +44,7 @@ public class RuntimeRegistryExporter implements DataProvider {
     }
 
     private <T> void dumpRegistry(CachedOutput cache, DynamicOps<JsonElement> ops, RegistryDataLoader.RegistryData<T> registryData, List<CompletableFuture<?>> futures) {
-        Optional<Registry<T>> optionalRegistry = this.registries.registry(registryData.key());
+        Optional<Registry<T>> optionalRegistry = this.registries.lookup(registryData.key());
         if (optionalRegistry.isEmpty()) {
             return;
         }
@@ -52,14 +52,14 @@ public class RuntimeRegistryExporter implements DataProvider {
         Registry<T> registry = optionalRegistry.get();
         PackOutput.PathProvider pathProvider = this.output.createRegistryElementsPathProvider(registryData.key());
 
-        for (Holder.Reference<T> holder : registry.holders().toList()) {
+        for (Holder.Reference<T> holder : registry.listElements().toList()) {
             // Encode using the un-tainted pure Vanilla ops
             registryData.elementCodec().encodeStart(ops, holder.value())
                     .resultOrPartial(err -> {
                         // Optional: You can log errors here if specific elements fail
                     })
                     .ifPresent(json -> {
-                        Path path = pathProvider.json(holder.key().location());
+                        Path path = pathProvider.json(holder.key().identifier());
                         futures.add(DataProvider.saveStable(cache, json, path));
                     });
         }

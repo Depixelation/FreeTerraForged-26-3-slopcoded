@@ -5,8 +5,10 @@ import java.util.function.Supplier;
 
 import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.KeyDispatchCodec;
-import net.minecraft.world.level.levelgen.DensityFunction;
-import net.minecraft.world.level.levelgen.DensityFunctions;
+import net.minecraft.world.level.levelgen.densityfunction.DensityFunction;
+import net.minecraft.world.level.levelgen.densityfunction.DensityFunctions;
+import net.minecraft.world.level.levelgen.densityfunction.DensitySampler;
+import net.minecraft.world.level.chunk.ChunkAccess;
 import org.jetbrains.annotations.Nullable;
 
 import com.mojang.serialization.Codec;
@@ -16,11 +18,12 @@ import it.unimi.dsi.fastutil.HashCommon;
 import net.minecraft.core.QuartPos;
 import net.minecraft.core.SectionPos;
 import net.minecraft.world.level.biome.Climate;
-import net.minecraft.util.KeyDispatchDataCodec;
 import net.minecraft.util.StringRepresentable;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.WorldSettings.ControlPoints;
+import etcodehome.freeterraforged.world.worldgen.IChunkCellsHolder;
 import etcodehome.freeterraforged.world.worldgen.biome.Continentalness;
 import etcodehome.freeterraforged.world.worldgen.cell.Cell;
+import etcodehome.freeterraforged.world.worldgen.cell.filter.ChunkFilterGrid;
 import etcodehome.freeterraforged.world.worldgen.cell.heightmap.Heightmap;
 import etcodehome.freeterraforged.world.worldgen.cell.heightmap.Levels;
 import etcodehome.freeterraforged.world.worldgen.cell.heightmap.WorldLookup;
@@ -49,8 +52,44 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field, Den
 		return CELL.get();
 	}
 
-	public static Cell getCachedOrLookup(WorldLookup lookup, int blockX, int blockZ, boolean sampleClimate) {
+	public static Cell getCellFast(WorldLookup lookup, int blockX, int blockZ, boolean sampleClimate) {
+		for (LookupFrame frame = LOOKUP_OVERRIDE.get(); frame != null; frame = frame.previous) {
+			if (frame.owner == lookup) {
+				Cell overridden = frame.lookup.lookup(blockX, blockZ, sampleClimate);
+				if (overridden != null) {
+					return overridden;
+				}
+			}
+		}
+
+		ChunkAccess activeChunk = IChunkCellsHolder.ACTIVE_CHUNK.get();
+		if (activeChunk instanceof IChunkCellsHolder holder) {
+			int minBlockX = activeChunk.getPos().getMinBlockX();
+			int minBlockZ = activeChunk.getPos().getMinBlockZ();
+			int relX = blockX - minBlockX;
+			int relZ = blockZ - minBlockZ;
+			if (relX >= -1 && relX <= 16 && relZ >= -1 && relZ <= 16) {
+				Cell[] chunkCells = holder.freeterraforged$getChunkCells();
+				if (chunkCells == null && lookup.getContext() != null) {
+					chunkCells = holder.freeterraforged$getOrCreateChunkCells(lookup.getContext());
+				}
+				if (chunkCells != null) {
+					if (chunkCells.length >= ChunkFilterGrid.HOLDER_ARRAY_LENGTH
+							|| (relX >= 0 && relX < 16 && relZ >= 0 && relZ < 16)) {
+						if (WorldgenPerfTracker.ACTIVE) {
+							WorldgenPerfTracker.stats().cellSamplerChunkHits++;
+						}
+						return ChunkFilterGrid.getPaddedCell(chunkCells, relX, relZ);
+					}
+				}
+			}
+		}
+
 		return CELL.get().getAndUpdate(lookup, blockX, blockZ, sampleClimate);
+	}
+
+	public static Cell getCachedOrLookup(WorldLookup lookup, int blockX, int blockZ, boolean sampleClimate) {
+		return getCellFast(lookup, blockX, blockZ, sampleClimate);
 	}
 
 	/**
@@ -147,16 +186,39 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field, Den
 	}
 
 	@Override
-	public double compute(DensityFunction.FunctionContext ctx) {
+	public double compute(MarkerFunction.FunctionContext ctx) {
 		WorldLookup worldLookup = this.deferredLookup.get();
 		if (worldLookup == null) {
-			return this.fallback.compute(ctx);
+			return MarkerFunction.compute(this.fallback, ctx);
 		}
-		Cell cell = CELL.get().getAndUpdate(worldLookup, ctx.blockX(), ctx.blockZ(), true);
+		boolean sampleClimate = this.field.requiresClimate();
+		Cell cell = getCellFast(worldLookup, ctx.blockX(), ctx.blockZ(), sampleClimate);
 		if (WorldgenPerfTracker.ACTIVE) {
 			WorldgenPerfTracker.stats().fieldReadCounts[this.field.ordinal()]++;
 		}
 		return this.field.readFinite(cell, worldLookup.getHeightmap());
+	}
+
+	@Override
+	public DensitySampler compileSampler(CompileContext context) {
+		DensitySampler fallbackSampler = this.fallback.compileSampler(context);
+		boolean sampleClimate = this.field.requiresClimate();
+		return MarkerFunction.pointSampler((samplerCtx, x, y, z) -> {
+			WorldLookup worldLookup = this.deferredLookup.get();
+			if (worldLookup == null) {
+				return fallbackSampler.sampleValue(samplerCtx, x, y, z);
+			}
+			Cell cell = getCellFast(worldLookup, x, z, sampleClimate);
+			if (WorldgenPerfTracker.ACTIVE) {
+				WorldgenPerfTracker.stats().fieldReadCounts[this.field.ordinal()]++;
+			}
+			return this.field.readFinite(cell, worldLookup.getHeightmap());
+		});
+	}
+
+	@Override
+	public int domainAxes() {
+		return DensityFunction.AXIS_X | DensityFunction.AXIS_Z;
 	}
 
 	@Override
@@ -310,7 +372,7 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field, Den
 		}
 
 		@Override
-		public double compute(FunctionContext ctx) {
+		public double compute(MarkerFunction.FunctionContext ctx) {
 			int bx = ctx.blockX();
 			int bz = ctx.blockZ();
 			if (bx == this.lastX && bz == this.lastZ) {
@@ -319,7 +381,7 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field, Den
 
 			WorldLookup worldLookup = CellSampler.this.deferredLookup.get();
 			if (worldLookup == null) {
-				double val = CellSampler.this.fallback.compute(ctx);
+				double val = MarkerFunction.compute(CellSampler.this.fallback, ctx);
 				this.lastX = bx;
 				this.lastZ = bz;
 				this.lastValue = val;
@@ -337,7 +399,7 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field, Den
 					this.perfStats.fieldReadCounts[CellSampler.this.field.ordinal()]++;
 				}
 			} else {
-				cell = CELL.get().getAndUpdate(worldLookup, bx, bz, false);
+				cell = CELL.get().getAndUpdate(worldLookup, bx, bz, CellSampler.this.field.requiresClimate());
 				if (this.perfStats != null) {
 					this.perfStats.fieldReadCounts[CellSampler.this.field.ordinal()]++;
 				}
@@ -347,6 +409,11 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field, Den
 			this.lastZ = bz;
 			this.lastValue = val;
 			return val;
+		}
+
+		@Override
+		public int domainAxes() {
+			return DensityFunction.AXIS_X | DensityFunction.AXIS_Z;
 		}
 
 		@Override
@@ -366,8 +433,13 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field, Den
 		).apply(instance, Marker::new));
 		
 		@Override
-		public KeyDispatchDataCodec<Marker> codec() {
-			return new KeyDispatchDataCodec<>(CODEC);
+		public MapCodec<Marker> codec() {
+			return CODEC;
+		}
+
+		@Override
+		public int domainAxes() {
+			return DensityFunction.AXIS_X | DensityFunction.AXIS_Z;
 		}
 	}
 	
@@ -526,6 +598,10 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field, Den
 		@Override
 		public String getSerializedName() {
 			return this.name;
+		}
+
+		public boolean requiresClimate() {
+			return this == TEMPERATURE || this == MOISTURE || this == BIOME_REGION;
 		}
 		
 		public abstract float read(Cell cell, Heightmap heightmap);

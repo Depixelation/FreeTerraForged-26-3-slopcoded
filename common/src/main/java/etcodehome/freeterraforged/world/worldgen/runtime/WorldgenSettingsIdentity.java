@@ -12,11 +12,11 @@ public final class WorldgenSettingsIdentity {
 	public static String describe(ChunkGenerator generator) {
 		Objects.requireNonNull(generator, "generator");
 		String type = generator.getTypeNameForDataFixer()
-			.map(key -> key.location().toString())
+			.map(Object::toString)
 			.orElseGet(() -> "unregistered:" + generator.getClass().getName());
 		if (generator instanceof NoiseBasedChunkGenerator noiseGenerator) {
 			return type + "|" + noiseGenerator.generatorSettings().unwrapKey()
-				.map(key -> key.location().toString())
+				.map(key -> key.identifier().toString())
 				.orElse("inline_noise_settings");
 		}
 		return type;

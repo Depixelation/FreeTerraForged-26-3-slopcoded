@@ -25,24 +25,40 @@ public final class OwnerThreadCache<V> {
 	}
 
 	public V find(long key) {
+		return this.get(key, null);
+	}
+
+	public V get(long key) {
+		return this.get(key, null);
+	}
+
+	public V find(long key, Object expectedOwner) {
+		return this.get(key, expectedOwner);
+	}
+
+	public V get(long key, Object expectedOwner) {
 		Table<V> local = this.localTable();
-		V value = local.find(key, this.mask);
+		V value = local.find(key, expectedOwner, this.mask);
 		if (value != null) {
 			return value;
 		}
-		value = this.shared.find(key, this.mask);
+		value = this.shared.find(key, expectedOwner, this.mask);
 		if (value != null) {
-			local.store(key, value, this.mask);
+			local.store(key, expectedOwner, value, this.mask);
 		}
 		return value;
 	}
 
 	public void store(long key, V value) {
+		this.store(key, null, value);
+	}
+
+	public void store(long key, Object owner, V value) {
 		if (value == null) {
 			return;
 		}
-		this.localTable().store(key, value, this.mask);
-		this.shared.store(key, value, this.mask);
+		this.localTable().store(key, owner, value, this.mask);
+		this.shared.store(key, owner, value, this.mask);
 	}
 
 	public void clear() {
@@ -79,15 +95,17 @@ public final class OwnerThreadCache<V> {
 	private static final class Table<V> {
 		private final AtomicLongArray sequences;
 		private final long[] keys;
+		private final Object[] owners;
 		private final AtomicReferenceArray<V> values;
 
 		private Table(int capacity) {
 			this.sequences = new AtomicLongArray(capacity);
 			this.keys = new long[capacity];
+			this.owners = new Object[capacity];
 			this.values = new AtomicReferenceArray<>(capacity);
 		}
 
-		private V find(long key, int mask) {
+		private V find(long key, Object expectedOwner, int mask) {
 			int index = (int) HashCommon.mix(key) & mask;
 			for (int attempt = 0; attempt < 3; attempt++) {
 				long before = this.sequences.get(index);
@@ -96,19 +114,26 @@ public final class OwnerThreadCache<V> {
 					continue;
 				}
 				long storedKey = this.keys[index];
+				Object storedOwner = this.owners[index];
 				V value = this.values.get(index);
 				long after = this.sequences.get(index);
 				if (before == after) {
-					return value != null && storedKey == key ? value : null;
+					if (value != null && storedKey == key) {
+						if (expectedOwner == null || storedOwner == expectedOwner) {
+							return value;
+						}
+					}
+					return null;
 				}
 			}
 			return null;
 		}
 
-		private void store(long key, V value, int mask) {
+		private void store(long key, Object owner, V value, int mask) {
 			int index = (int) HashCommon.mix(key) & mask;
 			long sequence = this.lock(index);
 			this.keys[index] = key;
+			this.owners[index] = owner;
 			this.values.set(index, value);
 			this.sequences.set(index, sequence + 2L);
 		}
@@ -116,6 +141,7 @@ public final class OwnerThreadCache<V> {
 		private void clear(int capacity) {
 			for (int index = 0; index < capacity; index++) {
 				long sequence = this.lock(index);
+				this.owners[index] = null;
 				this.values.set(index, null);
 				this.sequences.set(index, sequence + 2L);
 			}

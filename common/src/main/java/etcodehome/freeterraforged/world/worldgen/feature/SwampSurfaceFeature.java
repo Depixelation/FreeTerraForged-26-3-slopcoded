@@ -1,11 +1,13 @@
 package etcodehome.freeterraforged.world.worldgen.feature;
 
 import com.mojang.serialization.Codec;
+import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 
 import etcodehome.freeterraforged.world.worldgen.noise.module.Noise;
 import etcodehome.freeterraforged.world.worldgen.noise.module.Noises;
 import net.minecraft.core.BlockPos;
+import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.WorldGenLevel;
 import net.minecraft.world.level.biome.Biome;
@@ -14,25 +16,29 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.ChunkGenerator;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.level.levelgen.feature.Feature;
-import net.minecraft.world.level.levelgen.feature.FeaturePlaceContext;
-import net.minecraft.world.level.levelgen.feature.configurations.FeatureConfiguration;
-import etcodehome.freeterraforged.world.worldgen.feature.SwampSurfaceFeature.Config;
 
-public class SwampSurfaceFeature extends Feature<Config> {
+public class SwampSurfaceFeature implements Feature {
+	public static final MapCodec<SwampSurfaceFeature> CODEC = Config.MAP_CODEC.xmap(SwampSurfaceFeature::new, SwampSurfaceFeature::config);
 	private static final Noise MATERIAL_NOISE = makeMaterialNoise();
 	
-	public SwampSurfaceFeature(Codec<Config> codec) {
-		super(codec);
+	private final Config config;
+
+	public SwampSurfaceFeature(Config config) {
+		this.config = config;
+	}
+
+	public Config config() {
+		return this.config;
 	}
 
 	@Override
-	public boolean place(FeaturePlaceContext<Config> ctx) {
-		Config config = ctx.config();
-		BlockPos origin = ctx.origin();
-		ChunkPos chunkPos = new ChunkPos(origin);
-		// Operate on the WorldGenRegion, not the raw ChunkAccess
-		WorldGenLevel level = ctx.level();
-		ChunkGenerator generator = ctx.chunkGenerator();
+	public MapCodec<SwampSurfaceFeature> codec() {
+		return CODEC;
+	}
+
+	@Override
+	public boolean place(WorldGenLevel level, ChunkGenerator generator, RandomSource random, BlockPos origin) {
+		ChunkPos chunkPos = ChunkPos.containing(origin);
 		BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
 		int waterY = generator.getSeaLevel() - 1;
 
@@ -44,8 +50,8 @@ public class SwampSurfaceFeature extends Feature<Config> {
 
 				// Level.getHeight uses absolute coordinates safely
 				int surfaceY = level.getHeight(Heightmap.Types.WORLD_SURFACE, worldX, worldZ);
-				double noise = Biome.BIOME_INFO_NOISE.getValue(worldX * 0.25D, worldZ * 0.25D, false);
-				BlockState filler = getMaterial(worldX, waterY, worldZ, waterY, config);
+				double noise = Biome.BIOME_INFO_NOISE.get(worldX * 0.25D, worldZ * 0.25D);
+				BlockState filler = getMaterial(worldX, waterY, worldZ, waterY, this.config);
 
 				// Set our mutable pos to the absolute world coordinate before checking biome
 				pos.set(worldX, surfaceY, worldZ);
@@ -69,7 +75,7 @@ public class SwampSurfaceFeature extends Feature<Config> {
 					int oceanFloorY = level.getHeight(Heightmap.Types.OCEAN_FLOOR_WG, worldX, worldZ);
 					if (oceanFloorY <= waterY) {
 						pos.set(worldX, oceanFloorY, worldZ);
-						level.setBlock(pos, getMaterial(worldX, oceanFloorY, worldZ, waterY, config), 2);
+						level.setBlock(pos, getMaterial(worldX, oceanFloorY, worldZ, waterY, this.config), 2);
 					}
 				}
 			}
@@ -93,11 +99,12 @@ public class SwampSurfaceFeature extends Feature<Config> {
     	return Noises.warpWhite(base, 213, 2, 4);    	
     }
     
-    public record Config(BlockState clayMaterial, BlockState gravelMaterial, BlockState dirtMaterial) implements FeatureConfiguration {
-    	public static final Codec<Config> CODEC = RecordCodecBuilder.create(instance -> instance.group(
+    public record Config(BlockState clayMaterial, BlockState gravelMaterial, BlockState dirtMaterial) {
+    	public static final MapCodec<Config> MAP_CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
     		BlockState.CODEC.fieldOf("clay_material").forGetter(Config::clayMaterial),
     		BlockState.CODEC.fieldOf("gravel_material").forGetter(Config::gravelMaterial),
     		BlockState.CODEC.fieldOf("dirt_material").forGetter(Config::dirtMaterial)
     	).apply(instance, Config::new));
+    	public static final Codec<Config> CODEC = MAP_CODEC.codec();
     }
 }

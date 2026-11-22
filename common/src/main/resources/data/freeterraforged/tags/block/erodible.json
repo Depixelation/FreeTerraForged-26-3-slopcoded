@@ -6,6 +6,9 @@
     "minecraft:gravel"
   ],
   "values_from_tags": [
-    "minecraft:dirt"
+    "minecraft:dirt",
+    "minecraft:grass_blocks",
+    "minecraft:substrate_overworld",
+    "minecraft:supports_vegetation"
   ]
 }

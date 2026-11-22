@@ -5,27 +5,49 @@ import java.util.Arrays;
 import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 
-import net.minecraft.util.KeyDispatchDataCodec;
-import net.minecraft.world.level.levelgen.DensityFunction;
+import net.minecraft.util.Interval;
+import net.minecraft.world.level.levelgen.densityfunction.DensityFunction;
+import net.minecraft.world.level.levelgen.densityfunction.DensitySampler;
+import net.minecraft.world.level.levelgen.densityfunction.DfRewriteRule;
 
 public record ConditionalFlatCache(DensityFunction function) implements MarkerFunction {
 	public static final MapCodec<ConditionalFlatCache> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
-		HOLDER_HELPER_CODEC.fieldOf("function").forGetter(ConditionalFlatCache::function)
+		DensityFunction.CODEC.fieldOf("function").forGetter(ConditionalFlatCache::function)
 	).apply(instance, ConditionalFlatCache::new));
 
 	@Override
 	public double compute(FunctionContext ctx) {
-		return this.function.compute(ctx);
+		return MarkerFunction.compute(this.function, ctx);
 	}
 	
 	@Override
-	public KeyDispatchDataCodec<ConditionalFlatCache> codec() {
-		return new KeyDispatchDataCodec<>(CODEC);
+	public MapCodec<ConditionalFlatCache> codec() {
+		return CODEC;
+	}
+
+	@Override
+	public DensitySampler compileSampler(CompileContext context) {
+		return this.function.compileSampler(context);
+	}
+
+	@Override
+	public DensityFunction rewriteChildren(DfRewriteRule rule) {
+		return new ConditionalFlatCache(rule.rewrite(this.function));
+	}
+
+	@Override
+	public Interval range() {
+		return this.function.range();
+	}
+
+	@Override
+	public int domainAxes() {
+		return this.function.domainAxes();
 	}
 
 	@Override
 	public DensityFunction mapAll(Visitor visitor) {
-		return visitor.apply(new ConditionalFlatCache(this.function.mapAll(visitor)));
+		return visitor.apply(new ConditionalFlatCache(MarkerFunction.mapAll(this.function, visitor)));
 	}
 	
 	public class Cache implements MarkerFunction.Mapped {
@@ -51,21 +73,21 @@ public record ConditionalFlatCache(DensityFunction function) implements MarkerFu
             if (cacheX >= 0 && cacheZ >= 0 && cacheX < this.width && cacheZ < this.width) {
             	int index = cacheX * this.width + cacheZ;
             	if(Float.isNaN(this.cache[index])) {
-            		this.cache[index] = (float) ConditionalFlatCache.this.function.compute(ctx);
+            		this.cache[index] = (float) MarkerFunction.compute(ConditionalFlatCache.this.function, ctx);
             	}
                 return this.cache[index];
             }
-            return ConditionalFlatCache.this.function.compute(ctx);
+            return MarkerFunction.compute(ConditionalFlatCache.this.function, ctx);
 		}
 
 		@Override
 		public double minValue() {
-			return ConditionalFlatCache.this.function.minValue();
+			return ConditionalFlatCache.this.function.range().min();
 		}
 
 		@Override
 		public double maxValue() {
-			return ConditionalFlatCache.this.function.maxValue();
+			return ConditionalFlatCache.this.function.range().max();
 		}		
 	}
 }

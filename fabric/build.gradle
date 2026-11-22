@@ -1,19 +1,16 @@
-plugins {
-    id "com.gradleup.shadow" version "9.2.2"
-}
-
-architectury {
-    platformSetupLoomIde()
-    fabric()
-}
+evaluationDependsOn(":common")
 
 loom {
     accessWidenerPath = project(":common").loom.accessWidenerPath
-    runs {
-        server {
-            // Remove "nogui" so the vanilla Swing interface opens
-            programArgs.remove("nogui")
+
+    mods {
+        "freeterraforged" {
+            sourceSet sourceSets.main
+            sourceSet project(":common").sourceSets.main
         }
+    }
+
+    runs {
         benchmarkServer {
             server()
             name "Run Headless Worldgen Benchmark Server"
@@ -41,30 +38,22 @@ loom {
     }
 }
 
-configurations {
-    common
-    shadowCommon
-    architecturyTransformerClasspath
-    compileClasspath.extendsFrom common
-    runtimeClasspath.extendsFrom common
-    developmentFabric.extendsFrom common
-    architecturyTransformerClasspath.extendsFrom compileClasspath
-}
-
 dependencies {
-    modImplementation "net.fabricmc:fabric-loader:${rootProject.fabric_loader_version}"
-    modApi("net.fabricmc.fabric-api:fabric-api:${rootProject.fabric_api_version}") { exclude group: 'net.fabricmc', module: 'fabric-loader' }
-    modCompileOnly "maven.modrinth:biolith:3.0.14-fabric"
-    architecturyTransformerClasspath "com.github.glitchfiend:TerraBlender-neoforge:${rootProject.minecraft_version}-${rootProject.terrablender_version}"
-    architecturyTransformerClasspath "maven.modrinth:biolith:3.0.14-neoforge"
-    architecturyTransformerClasspath "maven.modrinth:lithostitched:1.8.0+beta4-neoforge-21.1"
-    common(project(path: ":common", configuration: "namedElements")) { transitive false }
-    shadowCommon(project(path: ":common", configuration: "transformProductionFabric")) { transitive false }
+    implementation "net.fabricmc:fabric-loader:${rootProject.fabric_loader_version}"
+    if (file("${project.rootDir}/libs/fabric-api-26.3").exists()) {
+        implementation fileTree(dir: "${project.rootDir}/libs/fabric-api-26.3", include: ["*.jar"])
+    } else {
+        modImplementation "net.fabricmc.fabric-api:fabric-api:${rootProject.fabric_api_version}"
+    }
+    compileOnly files("${project.rootDir}/libs/biolith-fabric-3.8.0-beta.2.jar")
+    compileOnly files("${project.rootDir}/libs/TerraBlender-fabric-26.3-26.3.0.0.9.jar")
+    compileOnly files("${project.rootDir}/libs/lithostitched-2.0.4-fabric-26.3.jar")
+    implementation(project(path: ":common")) { transitive = false }
 }
 
 tasks.register("prodServer", net.fabricmc.loom.task.prod.ServerProductionRunTask) {
     group = "fabric"
-    description = "Runs the remapped production artifact with Fabric's production server launcher"
+    description = "Runs the production artifact with Fabric's production server launcher"
     loaderVersion = rootProject.fabric_loader_version
     minecraftVersion = rootProject.minecraft_version
     runDir = file("run")
@@ -121,36 +110,24 @@ tasks.register("runPresetTest") {
 
 processResources {
     inputs.property "version", project.version
+    from(project(":common").sourceSets.main.resources)
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 
     filesMatching("fabric.mod.json") {
         expand "version": project.version
     }
 }
 
-shadowJar {
-    exclude "architectury.common.json"
-
-    configurations = [project.configurations.shadowCommon]
-    archiveClassifier.set("dev-shadow")
-}
-
-shadow {
-    addShadowVariantIntoJavaComponent = false
-}
-
-remapJar {
-    injectAccessWidener = true
-    input.set shadowJar.archiveFile
-    dependsOn shadowJar
-    archiveClassifier.set("fabric-${rootProject.minecraft_version}")
-}
-
 jar {
-    archiveClassifier.set("dev")
+    dependsOn project(":common").tasks.named("classes")
+    from(project(":common").sourceSets.main.output.classesDirs)
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    archiveClassifier.set("fabric-${rootProject.minecraft_version}")
 }
 
 sourcesJar {
     def commonSources = project(":common").sourcesJar
     dependsOn commonSources
     from commonSources.archiveFile.map { zipTree(it) }
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }

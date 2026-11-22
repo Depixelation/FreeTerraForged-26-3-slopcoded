@@ -13,6 +13,7 @@ import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.CycleButton;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.components.Tooltip;
+import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.level.levelgen.WorldOptions;
 import etcodehome.freeterraforged.client.data.FTFTranslationKeys;
@@ -114,23 +115,6 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 
 		this.createControls();
 
-		// 2. Dynamically fit the 3D preview inside the newly resized right column
-		if (this.preview3D != null) {
-			int padding = 10;
-
-			// Calculate a responsive width based on the column's new size
-			int dynamicWidth = this.right.getWidth() - (padding * 2);
-			int dynamicHeight = dynamicWidth; // Keep it a clean, un-stretched square
-
-			// Push the fresh coordinates and dimensions to the widget
-			this.preview3D.updateBounds(
-					this.right.getX() + padding,
-					this.right.getY() + padding,
-					dynamicWidth,
-					dynamicHeight
-			);
-		}
-
 		int elementWidth = this.left.getRowWidth();
 		int forceOffset = 2;
 
@@ -180,9 +164,9 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 		String currentSeed = this.getInitialSeedText();
 		this.seedEdit = new EditBox(Minecraft.getInstance().font, 0, 0, 0, 20, Component.translatable(FTFTranslationKeys.GUI_BUTTON_SEED)) {
 			@Override
-			public boolean mouseClicked(double mouseX, double mouseY, int button) {
+			public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
 				boolean wasFocused = this.isFocused();
-				boolean handled = super.mouseClicked(mouseX, mouseY, button);
+				boolean handled = super.mouseClicked(event, doubleClick);
 				// Highlight text only when clicking to gain focus
 				if (handled && !wasFocused) {
 					this.setCursorPosition(this.getValue().length());
@@ -191,7 +175,7 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 				return handled;
 			}
 		};
-		this.seedEdit.setTextColor(0xFFFFFF);
+		this.seedEdit.setTextColor(0xFFFFFFFF);
 		this.seedEdit.setHint(Component.translatable(FTFTranslationKeys.GUI_BUTTON_SEED));
 		this.seedEdit.setValue(currentSeed);
 		this.seedEdit.setResponder((text) -> {

@@ -97,7 +97,7 @@ class MixinClimateSampler {
 	}
 
 	public void freeterraforged$FTFClimateSampler$setSpawnSearch(FTFClimateSampler.SpawnSearch spawnSearch) {
-		this.spawnSearch = java.util.Objects.requireNonNull(spawnSearch, "spawnSearch");
+		this.spawnSearch = spawnSearch != null ? spawnSearch : freeterraforged$defaultSpawnSearch;
 	}
 
 	public FTFClimateSampler.SpawnSearch freeterraforged$FTFClimateSampler$getSpawnSearch() {

@@ -15,7 +15,7 @@ import etcodehome.freeterraforged.world.worldgen.feature.template.template.Featu
 
 @Implements(@Interface(iface = FTFMinecraftServer.class, prefix = "freeterraforged$FTFMinecraftServer$"))
 @Mixin(MinecraftServer.class)
-public class MixinMinecraftServer {
+public abstract class MixinMinecraftServer {
 	private FeatureTemplateManager templateManager;
 
 	@Inject(
@@ -31,7 +31,5 @@ public class MixinMinecraftServer {
 	}
 
 	@Shadow
-	private ResourceManager getResourceManager() {
-		throw new UnsupportedOperationException();
-	}
+	public abstract ResourceManager getResourceManager();
 }

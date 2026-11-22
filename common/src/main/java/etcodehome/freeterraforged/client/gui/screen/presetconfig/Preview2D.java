@@ -1,19 +1,19 @@
 package etcodehome.freeterraforged.client.gui.screen.presetconfig;
 
-import com.mojang.blaze3d.platform.GlStateManager;
 import com.mojang.blaze3d.platform.NativeImage;
-import com.mojang.blaze3d.systems.RenderSystem;
 
 import etcodehome.freeterraforged.world.worldgen.cell.Cell;
 import etcodehome.freeterraforged.world.worldgen.cell.heightmap.Levels;
 import etcodehome.freeterraforged.world.worldgen.noise.NoiseUtil;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.input.MouseButtonEvent;
+import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.network.chat.CommonComponents;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import etcodehome.freeterraforged.FTFCommon;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.SpawnType;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.WorldSettings;
@@ -25,7 +25,7 @@ public class Preview2D extends Button implements IPreviewHandler {
 
     // Statically cached backing texture shared across widget instances
     private static DynamicTexture STATIC_TEXTURE;
-    private static ResourceLocation STATIC_TEXTURE_ID;
+    private static Identifier STATIC_TEXTURE_ID;
 
     private final PresetEditorPage page;
     private final PreviewState state = new PreviewState();
@@ -37,11 +37,12 @@ public class Preview2D extends Button implements IPreviewHandler {
         getOrCreateTexture();
     }
 
-    private static ResourceLocation getOrCreateTexture() {
+    private static Identifier getOrCreateTexture() {
         if (STATIC_TEXTURE == null) {
-            STATIC_TEXTURE = new DynamicTexture(new NativeImage(SIZE, SIZE, false));
-            STATIC_TEXTURE_ID = Minecraft.getInstance().getTextureManager().register(
-                    FTFCommon.MOD_ID + "-preview-framebuffer",
+            STATIC_TEXTURE = new DynamicTexture(() -> "ftf_preview_framebuffer", new NativeImage(SIZE, SIZE, false));
+            STATIC_TEXTURE_ID = Identifier.fromNamespaceAndPath(FTFCommon.MOD_ID, "preview-framebuffer");
+            Minecraft.getInstance().getTextureManager().register(
+                    STATIC_TEXTURE_ID,
                     STATIC_TEXTURE
             );
 
@@ -169,7 +170,7 @@ public class Preview2D extends Button implements IPreviewHandler {
         for (int bz = 0; bz < tileWidth; bz++) {
             int rowOffset = bz * tileWidth;
             for (int bx = 0; bx < tileWidth; bx++) {
-                pixels.setPixelRGBA(bx, bz, pixelData[rowOffset + bx]);
+                pixels.setPixelABGR(bx, bz, pixelData[rowOffset + bx]);
             }
         }
         STATIC_TEXTURE.upload();
@@ -191,11 +192,11 @@ public class Preview2D extends Button implements IPreviewHandler {
     }
 
     @Override
-    public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        if (handleClick(mouseX, mouseY, button)) {
+    public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+        if (handleClick(event.x(), event.y(), event.button())) {
             return true;
         }
-        return super.mouseClicked(mouseX, mouseY, button);
+        return super.mouseClicked(event, doubleClick);
     }
 
     @Override
@@ -207,7 +208,7 @@ public class Preview2D extends Button implements IPreviewHandler {
     }
 
     @Override
-    public void renderWidget(GuiGraphics guiGraphics, int mx, int my, float partialTicks) {
+    public void extractContents(GuiGraphicsExtractor guiGraphics, int mx, int my, float partialTicks) {
         int xPos = this.getX();
         int yPos = this.getY();
 
@@ -216,23 +217,18 @@ public class Preview2D extends Button implements IPreviewHandler {
             return;
         }
 
-        // Always blit the static texture (preserves the previous page's rendered frame
-        // while the new page tile generates in the background)
-        RenderSystem.enableBlend();
-        RenderSystem.blendFuncSeparate(GlStateManager.SourceFactor.SRC_ALPHA, GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA, GlStateManager.SourceFactor.ONE, GlStateManager.DestFactor.ZERO);
-        RenderSystem.blendFunc(GlStateManager.SourceFactor.SRC_ALPHA, GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA);
-        guiGraphics.blit(getOrCreateTexture(), xPos, yPos, 0, 0, this.width, this.height, this.width, this.height);
+        guiGraphics.blit(RenderPipelines.GUI_TEXTURED, getOrCreateTexture(), xPos, yPos, 0.0F, 0.0F, this.width, this.height, SIZE, SIZE, SIZE, SIZE);
 
         renderSpawnMarker(guiGraphics);
         updateLegend(mx, my);
-        renderLegend(guiGraphics, mx, my, this.state.legendLabels, this.state.legendValues, xPos, yPos + this.width + 30, 10, 0xFFFFFF);
+        renderLegend(guiGraphics, mx, my, this.state.legendLabels, this.state.legendValues, xPos, yPos + this.width + 30, 10, 0xFFFFFFFF);
     }
 
-    private void renderSpawnMarker(GuiGraphics guiGraphics) {
+    private void renderSpawnMarker(GuiGraphicsExtractor guiGraphics) {
         WorldSettings.Properties props = this.page.preset.getPreset().world().properties;
 
         if (props.spawnType == SpawnType.USER_SELECTED || props.spawnType == SpawnType.CONTINENT_CENTER) {
-            int currentZoom = this.getZoom();
+            int currentZoom = this.state.zoom > 0 ? this.state.zoom : this.getZoom();
 
             if (this.state.grid != null) {
                 float relX = (float) (props.spawnX - this.state.centerX) / (this.state.grid.size() * currentZoom);
@@ -241,9 +237,12 @@ public class Preview2D extends Button implements IPreviewHandler {
                 int markerX = this.getX() + (this.width / 2) + (int) (relX * this.width);
                 int markerY = this.getY() + (this.height / 2) + (int) (relZ * this.height);
 
-                if (markerX >= this.getX() && markerX <= this.getX() + this.width &&
-                        markerY >= this.getY() && markerY <= this.getY() + this.height) {
+                int minX = this.getX() + 4;
+                int maxX = this.getX() + this.width - 4;
+                int minY = this.getY() + 4;
+                int maxY = this.getY() + this.height - 4;
 
+                if (markerX >= minX && markerX <= maxX && markerY >= minY && markerY <= maxY) {
                     int size = 5;
                     int color = 0xFFFFFFFF;
                     int shadow = 0xFF000000;
@@ -266,7 +265,7 @@ public class Preview2D extends Button implements IPreviewHandler {
             int top = this.getY();
             float size = this.width;
 
-            int currentZoom = this.getZoom();
+            int currentZoom = this.state.zoom > 0 ? this.state.zoom : this.getZoom();
             int width = Math.max(1, this.state.grid.size() * currentZoom);
             int height = Math.max(1, this.state.grid.size() * currentZoom);
             this.state.legendValues[0] = width + "x" + height;
@@ -303,7 +302,7 @@ public class Preview2D extends Button implements IPreviewHandler {
     public static void resetToBlack() {
         if (STATIC_TEXTURE != null) {
             NativeImage pixels = STATIC_TEXTURE.getPixels();
-            if (pixels != null) {
+            if (pixels != null && !pixels.isClosed()) {
                 pixels.fillRect(0, 0, SIZE, SIZE, 0xFF000000);
                 STATIC_TEXTURE.upload();
             }

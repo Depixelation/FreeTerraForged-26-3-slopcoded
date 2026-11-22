@@ -223,11 +223,14 @@ public final class SurfaceFeatureRescue {
 				return false;
 			}
 			for (PlacementModifier modifier : this.pipeline.downstreamFilters()) {
-				if (modifier.getPositions(
+				boolean[] accepted = {false};
+				modifier.modify(
 					this.context,
 					net.minecraft.util.RandomSource.create(0L),
-					placement
-				).findAny().isEmpty()) {
+					placement,
+					pos -> accepted[0] = true
+				);
+				if (!accepted[0]) {
 					return false;
 				}
 			}

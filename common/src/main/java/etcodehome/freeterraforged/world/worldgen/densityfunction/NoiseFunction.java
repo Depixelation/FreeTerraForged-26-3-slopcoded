@@ -4,8 +4,9 @@ import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 
 import net.minecraft.core.Holder;
-import net.minecraft.util.KeyDispatchDataCodec;
-import net.minecraft.world.level.levelgen.DensityFunction;
+import net.minecraft.world.level.levelgen.densityfunction.DensityFunction;
+import net.minecraft.world.level.levelgen.densityfunction.DensitySampler;
+import net.minecraft.world.level.levelgen.densityfunction.DfRewriteRule;
 import etcodehome.freeterraforged.world.worldgen.noise.module.Noise;
 
 public record NoiseFunction(Holder<Noise> noise, int seed) implements MarkerFunction.Mapped {
@@ -13,6 +14,18 @@ public record NoiseFunction(Holder<Noise> noise, int seed) implements MarkerFunc
 	@Override
 	public double compute(FunctionContext ctx) {
 		return this.noise.value().compute(ctx.blockX(), ctx.blockZ(), this.seed);
+	}
+
+	@Override
+	public DensitySampler compileSampler(CompileContext context) {
+		Noise noiseModule = this.noise.value();
+		int s = this.seed;
+		return MarkerFunction.pointSampler((samplerCtx, x, y, z) -> noiseModule.compute(x, z, s));
+	}
+
+	@Override
+	public int domainAxes() {
+		return DensityFunction.AXIS_X | DensityFunction.AXIS_Z;
 	}
 
 	@Override
@@ -31,8 +44,21 @@ public record NoiseFunction(Holder<Noise> noise, int seed) implements MarkerFunc
 		).apply(instance, NoiseFunction.Marker::new));
 
 		@Override
-		public KeyDispatchDataCodec<NoiseFunction.Marker> codec() {
-			return new KeyDispatchDataCodec<>(CODEC);
+		public MapCodec<NoiseFunction.Marker> codec() {
+			return CODEC;
+		}
+
+		@Override
+		public int domainAxes() {
+			return DensityFunction.AXIS_X | DensityFunction.AXIS_Z;
+		}
+
+		@Override
+		public DensityFunction rewriteChildren(DfRewriteRule rule) {
+			if (rule instanceof Noise.Visitor noiseVisitor) {
+				return new Marker(Holder.direct(this.noise.value().mapAll(noiseVisitor)));
+			}
+			return this;
 		}
 
 		@Override

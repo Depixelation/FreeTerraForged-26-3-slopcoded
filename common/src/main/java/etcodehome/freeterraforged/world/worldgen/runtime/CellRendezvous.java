@@ -4,7 +4,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Objects;
 
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 
 public final class CellRendezvous {
 	private CellRendezvous() {
@@ -80,7 +80,7 @@ public final class CellRendezvous {
 		return value ^ (value >>> 31);
 	}
 
-	public record Choice<T>(ResourceLocation id, double weight, T value) {
+	public record Choice<T>(Identifier id, double weight, T value) {
 		public Choice {
 			id = Objects.requireNonNull(id, "id");
 			if (!Double.isFinite(weight) || weight <= 0.0D) {

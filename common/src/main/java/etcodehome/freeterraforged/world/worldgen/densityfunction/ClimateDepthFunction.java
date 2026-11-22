@@ -6,8 +6,8 @@ import com.mojang.serialization.Codec;
 import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 
-import net.minecraft.util.KeyDispatchDataCodec;
-import net.minecraft.world.level.levelgen.DensityFunction;
+import net.minecraft.world.level.levelgen.densityfunction.DensityFunction;
+import net.minecraft.world.level.levelgen.densityfunction.DensitySampler;
 import etcodehome.freeterraforged.world.worldgen.cell.Cell;
 import etcodehome.freeterraforged.world.worldgen.cell.heightmap.WorldLookup;
 
@@ -32,8 +32,10 @@ public record ClimateDepthFunction(
 
 	@Override
 	public double compute(FunctionContext ctx) {
-		int bx = ctx.blockX();
-		int bz = ctx.blockZ();
+		return this.computeAt(ctx.blockX(), ctx.blockY(), ctx.blockZ());
+	}
+
+	public double computeAt(int bx, int by, int bz) {
 		ThreadMru mru = THREAD_MRU.get();
 		int surfaceY;
 		if (mru.blockX == bx && mru.blockZ == bz) {
@@ -49,7 +51,6 @@ public record ClimateDepthFunction(
 			mru.blockZ = bz;
 			mru.surfaceY = surfaceY;
 		}
-		int by = ctx.blockY();
 
 		if (by <= surfaceY) {
 			int depthSpan = surfaceY + this.worldDepth;
@@ -69,8 +70,8 @@ public record ClimateDepthFunction(
 	}
 
 	@Override
-	public void fillArray(double[] arr, ContextProvider ctx) {
-		ctx.fillAllDirectly(arr, this);
+	public DensitySampler compileSampler(CompileContext context) {
+		return MarkerFunction.pointSampler((samplerCtx, x, y, z) -> (float) this.computeAt(x, y, z));
 	}
 
 	@Override
@@ -96,8 +97,8 @@ public record ClimateDepthFunction(
 		).apply(instance, Marker::new));
 
 		@Override
-		public KeyDispatchDataCodec<Marker> codec() {
-			return new KeyDispatchDataCodec<>(CODEC);
+		public MapCodec<Marker> codec() {
+			return CODEC;
 		}
 	}
 }

@@ -2,7 +2,7 @@ package etcodehome.freeterraforged.tags;
 
 import net.minecraft.core.registries.Registries;
 import net.minecraft.tags.TagKey;
-import net.minecraft.world.level.levelgen.DensityFunction;
+import net.minecraft.world.level.levelgen.densityfunction.DensityFunction;
 import etcodehome.freeterraforged.FTFCommon;
 
 public final class FTFDensityFunctionTags {

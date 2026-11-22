@@ -93,7 +93,7 @@ public class PresetBiomeModifierData {
 					VegetationPlacements.TREES_PLAINS, PresetPlacedFeatures.PLAINS_TREES
 			)));
 			ctx.register(REPLACE_FOREST_TREES, BiomeModifiers.replace(GenerationStep.Decoration.VEGETAL_DECORATION, forests, Map.of(
-					VegetationPlacements.TREES_BIRCH_AND_OAK, PresetPlacedFeatures.FOREST_TREES
+					VegetationPlacements.TREES_BIRCH_AND_OAK_LEAF_LITTER, PresetPlacedFeatures.FOREST_TREES
 			)));
 			ctx.register(REPLACE_FLOWER_FOREST_TREES, BiomeModifiers.replace(GenerationStep.Decoration.VEGETAL_DECORATION, flowerForests, Map.of(
 					VegetationPlacements.TREES_FLOWER_FOREST, PresetPlacedFeatures.FLOWER_FOREST_TREES
@@ -156,8 +156,8 @@ public class PresetBiomeModifierData {
 			ctx.register(ADD_COLD_STEPPE_BUSH, prepend(GenerationStep.Decoration.VEGETAL_DECORATION, Filter.Behavior.WHITELIST, coldSteppeBiomes, placedFeatures.getOrThrow(PresetPlacedFeatures.COLD_STEPPE_BUSH)));
 			ctx.register(ADD_TAIGA_SCRUB_BUSH, prepend(GenerationStep.Decoration.VEGETAL_DECORATION, Filter.Behavior.WHITELIST, taigaScrubBiomes, placedFeatures.getOrThrow(PresetPlacedFeatures.TAIGA_SCRUB_BUSH)));
 
-			ctx.register(ADD_FOREST_GRASS, prepend(GenerationStep.Decoration.VEGETAL_DECORATION, Filter.Behavior.WHITELIST, forestsWithGrass, placedFeatures.getOrThrow(PresetPlacedFeatures.FOREST_GRASS)));
-			ctx.register(ADD_BIRCH_FOREST_GRASS, prepend(GenerationStep.Decoration.VEGETAL_DECORATION, Filter.Behavior.WHITELIST, birchForests, placedFeatures.getOrThrow(PresetPlacedFeatures.BIRCH_FOREST_GRASS)));
+			ctx.register(ADD_FOREST_GRASS, append(GenerationStep.Decoration.VEGETAL_DECORATION, Filter.Behavior.WHITELIST, forestsWithGrass, placedFeatures.getOrThrow(PresetPlacedFeatures.FOREST_GRASS)));
+			ctx.register(ADD_BIRCH_FOREST_GRASS, append(GenerationStep.Decoration.VEGETAL_DECORATION, Filter.Behavior.WHITELIST, birchForests, placedFeatures.getOrThrow(PresetPlacedFeatures.BIRCH_FOREST_GRASS)));
 		}
 
 		if(miscellaneous.screeDecorator) {

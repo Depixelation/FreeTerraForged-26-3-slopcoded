@@ -24,6 +24,7 @@ import etcodehome.freeterraforged.data.worldgen.preset.PresetNoiseGeneratorSetti
 import etcodehome.freeterraforged.data.worldgen.preset.PresetNoiseRouterData;
 import etcodehome.freeterraforged.data.worldgen.preset.PresetPlacedFeatures;
 import etcodehome.freeterraforged.data.worldgen.preset.PresetStructureRuleData;
+import etcodehome.freeterraforged.data.worldgen.preset.PresetSurfaceRuleData;
 import etcodehome.freeterraforged.data.worldgen.preset.PresetWorldPresets;
 import etcodehome.freeterraforged.world.worldgen.noise.module.Noise;
 
@@ -74,12 +75,12 @@ public record Preset(WorldSettings world, SurfaceSettings surface, CaveSettings 
 		).patches();
 		return new HolderLookup.Provider() {
 			@Override
-			public Stream<ResourceKey<? extends Registry<?>>> listRegistries() {
-				return Stream.concat(selected.listRegistries(), overrides.stream()).distinct();
+			public Stream<ResourceKey<? extends Registry<?>>> listRegistryKeys() {
+				return Stream.concat(selected.listRegistryKeys(), overrides.stream()).distinct();
 			}
 
 			@Override
-			public <T> Optional<HolderLookup.RegistryLookup<T>> lookup(
+			public <T> Optional<? extends HolderLookup.RegistryLookup<T>> lookup(
 				ResourceKey<? extends Registry<? extends T>> key
 			) {
 				return overrides.contains(key) ? patches.lookup(key) : selected.lookup(key);
@@ -95,7 +96,7 @@ public record Preset(WorldSettings world, SurfaceSettings surface, CaveSettings 
 		this.addPatch(builder, FTFRegistries.NOISE, PresetNoiseData::bootstrap);
 		this.addPatch(builder, FTFRegistries.BIOME_MODIFIER, PresetBiomeModifierData::bootstrap);
 		this.addPatch(builder, FTFRegistries.STRUCTURE_RULE, PresetStructureRuleData::bootstrap);
-		this.addPatch(builder, Registries.CONFIGURED_FEATURE, PresetConfiguredFeatures::bootstrap);
+		this.addPatch(builder, Registries.FEATURE, PresetConfiguredFeatures::bootstrap);
 		this.addPatch(builder, Registries.PLACED_FEATURE, PresetPlacedFeatures::bootstrap);
 		this.addPatch(builder, Registries.DIMENSION_TYPE, PresetDimensionTypes::bootstrap);
 		this.addPatch(builder, Registries.DENSITY_FUNCTION, (preset, ctx) -> {
@@ -109,7 +110,7 @@ public record Preset(WorldSettings world, SurfaceSettings surface, CaveSettings 
 		Cloner.Factory factory = new Cloner.Factory();
 		Set<ResourceKey<? extends Registry<?>>> armedRegistries = new HashSet<>();
 
-		RegistryDataLoader.WORLDGEN_REGISTRIES.forEach(registryData -> {
+		RegistryDataLoader.WORLD_REGISTRIES.forEach(registryData -> {
 			ResourceKey<? extends Registry<?>> key = registryData.key();
 			registryData.runWithArguments(factory::addCodec);
 			armedRegistries.add(key);
@@ -149,11 +150,11 @@ public record Preset(WorldSettings world, SurfaceSettings surface, CaveSettings 
 	private HolderLookup.Provider filterToArmedOnly(HolderLookup.Provider original, Set<ResourceKey<? extends Registry<?>>> armed) {
 		return new HolderLookup.Provider() {
 			@Override
-			public <T> Optional<HolderLookup.RegistryLookup<T>> lookup(ResourceKey<? extends Registry<? extends T>> key) {
+			public <T> Optional<? extends HolderLookup.RegistryLookup<T>> lookup(ResourceKey<? extends Registry<? extends T>> key) {
 				if (!armed.contains(key)) {
 					return Optional.empty();
 				}
-				Optional<HolderLookup.RegistryLookup<T>> found = original.lookup(key);
+				Optional<? extends HolderLookup.RegistryLookup<T>> found = original.lookup(key);
 				if (found.isPresent()) {
 					return found;
 				}
@@ -161,8 +162,8 @@ public record Preset(WorldSettings world, SurfaceSettings surface, CaveSettings 
 			}
 
 			@Override
-			public Stream<ResourceKey<? extends Registry<?>>> listRegistries() {
-				return Stream.concat(original.listRegistries(), armed.stream()).filter(armed::contains).distinct();
+			public Stream<ResourceKey<? extends Registry<?>>> listRegistryKeys() {
+				return Stream.concat(original.listRegistryKeys(), armed.stream()).filter(armed::contains).distinct();
 			}
 		};
 	}
@@ -197,11 +198,6 @@ public record Preset(WorldSettings world, SurfaceSettings surface, CaveSettings 
 			@Override
 			public Optional<HolderSet.Named<T>> get(TagKey<T> tagKey) {
 				return Optional.empty();
-			}
-
-			@Override
-			public boolean canSerializeIn(HolderOwner<T> owner) {
-				return owner == this;
 			}
 		};
 	}

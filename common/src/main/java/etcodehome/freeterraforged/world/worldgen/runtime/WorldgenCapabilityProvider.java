@@ -6,11 +6,11 @@ import java.util.OptionalLong;
 import java.util.Set;
 
 import net.minecraft.resources.ResourceKey;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.dimension.LevelStem;
 
 public interface WorldgenCapabilityProvider {
-	ResourceLocation id();
+	Identifier id();
 
 	int version();
 

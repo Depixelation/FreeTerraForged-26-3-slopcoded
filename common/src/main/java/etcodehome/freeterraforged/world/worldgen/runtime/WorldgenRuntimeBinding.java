@@ -165,7 +165,7 @@ public final class WorldgenRuntimeBinding {
 				if (biome.unwrapKey().isPresent() && !generationSettings.containsKey(biome.unwrapKey().orElseThrow())) {
 					throw new IllegalArgumentException(
 						"Executable biome selection has no compiled generation settings for " +
-						biome.unwrapKey().orElseThrow().location()
+						biome.unwrapKey().orElseThrow().identifier()
 					);
 				}
 			}

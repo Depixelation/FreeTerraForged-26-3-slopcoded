@@ -1,6 +1,7 @@
 package etcodehome.freeterraforged.world.worldgen.feature;
 
 import com.mojang.serialization.Codec;
+import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 
 import net.minecraft.core.BlockPos;
@@ -11,12 +12,13 @@ import net.minecraft.world.level.LevelAccessor;
 import net.minecraft.world.level.WorldGenLevel;
 import net.minecraft.world.level.block.LeavesBlock;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.chunk.ChunkGenerator;
 import net.minecraft.world.level.levelgen.feature.Feature;
-import net.minecraft.world.level.levelgen.feature.FeaturePlaceContext;
-import net.minecraft.world.level.levelgen.feature.configurations.FeatureConfiguration;
 import etcodehome.freeterraforged.world.worldgen.feature.template.BlockUtils;
 
-public class BushFeature extends Feature<BushFeature.Config> {
+public class BushFeature implements Feature {
+	public static final MapCodec<BushFeature> CODEC = Config.MAP_CODEC.xmap(BushFeature::new, BushFeature::config);
+
     private static final Vec3i[] LOG_POSITIONS = {
     	new Vec3i(+1, 0, +1),
     	new Vec3i(+1, 0, -1),
@@ -42,33 +44,38 @@ public class BushFeature extends Feature<BushFeature.Config> {
     	new Vec3i(0, 1, 0),
     };
     
-    public BushFeature(Codec<Config> codec) {
-		super(codec);
+    private final Config config;
+
+    public BushFeature(Config config) {
+		this.config = config;
+	}
+
+	public Config config() {
+		return this.config;
 	}
 
 	@Override
-	public boolean place(FeaturePlaceContext<Config> ctx) {
+	public MapCodec<BushFeature> codec() {
+		return CODEC;
+	}
+
+	@Override
+	public boolean place(WorldGenLevel level, ChunkGenerator chunkGenerator, RandomSource rand, BlockPos pos) {
         BlockPos.MutableBlockPos log = new BlockPos.MutableBlockPos();
         BlockPos.MutableBlockPos leaf = new BlockPos.MutableBlockPos();
-        WorldGenLevel level = ctx.level();
-        RandomSource rand = ctx.random();
-        BlockPos pos = ctx.origin();
-        Config config = ctx.config();
         
-        this.place(level, log.set(pos), leaf, rand, config);
-        for (float chance = rand.nextFloat(); chance < config.sizeChance; chance += rand.nextFloat()) {
+        boolean placed = this.place(level, log.set(pos), leaf, rand, this.config);
+        for (float chance = rand.nextFloat(); chance < this.config.sizeChance; chance += rand.nextFloat()) {
             addToMutable(log, LOG_POSITIONS[rand.nextInt(LOG_POSITIONS.length)]);
 
-            if (!this.place(level, log, leaf, rand, config)) {
+            if (!this.place(level, log, leaf, rand, this.config)) {
                 break;
             }
         }
-        return false;
+        return placed;
 	}
 
     private boolean place(LevelAccessor world, BlockPos.MutableBlockPos center, BlockPos.MutableBlockPos pos, RandomSource random, Config config) {
-//        center.setY(world.getHeight(Heightmap.Types.WORLD_SURFACE, center.getX(), center.getZ()));
-
         // don't replace solid blocks
         if (!BlockUtils.canTreeReplace(world, center)) {
             return false;
@@ -123,14 +130,15 @@ public class BushFeature extends Feature<BushFeature.Config> {
         pos.set(pos.getX() + add.getX(), pos.getY() + add.getY(), pos.getZ() + add.getZ());
     }
 
-    public record Config(BlockState trunk, BlockState leaves, float airChance, float leafChance, float sizeChance) implements FeatureConfiguration {
-        public static final Codec<Config> CODEC = RecordCodecBuilder.create(instance -> instance.group(
+    public record Config(BlockState trunk, BlockState leaves, float airChance, float leafChance, float sizeChance) {
+        public static final MapCodec<Config> MAP_CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
         	BlockState.CODEC.fieldOf("trunk").forGetter(Config::trunk),
         	BlockState.CODEC.fieldOf("leaves").forGetter(Config::leaves),
         	Codec.FLOAT.optionalFieldOf("air_chance", 0.075F).forGetter(Config::airChance),
         	Codec.FLOAT.optionalFieldOf("leaf_chance", 0.075F).forGetter(Config::leafChance),
         	Codec.FLOAT.optionalFieldOf("size_chance", 0.75F).forGetter(Config::sizeChance)
         ).apply(instance, Config::new));
+        public static final Codec<Config> CODEC = MAP_CODEC.codec();
 
         public BlockState leavesWithDistance(int distance) {
             if (leaves.hasProperty(LeavesBlock.DISTANCE)) {

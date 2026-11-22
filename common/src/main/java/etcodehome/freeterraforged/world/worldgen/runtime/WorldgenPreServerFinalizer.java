@@ -6,7 +6,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.chunk.ChunkGenerator;
 import etcodehome.freeterraforged.FTFCommon;
 
@@ -48,7 +48,7 @@ public final class WorldgenPreServerFinalizer {
 			return new Report(List.of());
 		}
 		WorldgenProviderCatalog.Resolution resolution = catalog.resolvePreServer();
-		Map<ResourceLocation, CapabilityFailure> rejected = new LinkedHashMap<>();
+		Map<Identifier, CapabilityFailure> rejected = new LinkedHashMap<>();
 		resolution.failures().forEach(failed -> rejected.put(failed.metadata().id(), failed.failure()));
 		for (WorldgenProviderCatalog.ProviderBinding binding : resolution.providers()) {
 			WorldgenCapabilityProvider provider = binding.provider();
@@ -92,7 +92,7 @@ public final class WorldgenPreServerFinalizer {
 			.toList();
 	}
 
-	static Optional<CapabilityFailure> failure(ChunkGenerator generator, ResourceLocation provider) {
+	static Optional<CapabilityFailure> failure(ChunkGenerator generator, Identifier provider) {
 		return generator instanceof TerraForgedChunkGenerator terraForged
 			? terraForged.preServerFailure(provider)
 			: Optional.empty();

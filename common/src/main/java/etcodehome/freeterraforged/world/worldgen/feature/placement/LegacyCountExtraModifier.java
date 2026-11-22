@@ -1,5 +1,6 @@
 package etcodehome.freeterraforged.world.worldgen.feature.placement;
 
+import java.util.function.Consumer;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
@@ -11,9 +12,8 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.levelgen.placement.PlacementContext;
 import net.minecraft.world.level.levelgen.placement.PlacementModifier;
-import net.minecraft.world.level.levelgen.placement.PlacementModifierType;
 
-class LegacyCountExtraModifier extends PlacementModifier {
+class LegacyCountExtraModifier implements PlacementModifier {
 	public static final MapCodec<LegacyCountExtraModifier> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
 		Codec.INT.fieldOf("count").forGetter((p) -> p.count),
 		Codec.FLOAT.fieldOf("extra_chance").forGetter((p) -> p.extraChance),
@@ -30,7 +30,6 @@ class LegacyCountExtraModifier extends PlacementModifier {
 		this.extraCount = extraCount;
 	}
 	
-	@Override
 	public Stream<BlockPos> getPositions(PlacementContext ctx, RandomSource random, BlockPos pos) {
 	      int i = this.count + (random.nextFloat() < this.extraChance ? this.extraCount : 0);
 	      return IntStream.range(0, i).mapToObj((o) -> {
@@ -39,7 +38,15 @@ class LegacyCountExtraModifier extends PlacementModifier {
 	}
 
 	@Override
-	public PlacementModifierType<LegacyCountExtraModifier> type() {
+	public void modify(PlacementContext ctx, RandomSource random, BlockPos pos, Consumer<BlockPos> output) {
+		int i = this.count + (random.nextFloat() < this.extraChance ? this.extraCount : 0);
+		for (int j = 0; j < i; j++) {
+			output.accept(pos);
+		}
+	}
+
+	@Override
+	public MapCodec<LegacyCountExtraModifier> codec() {
 		return FTFPlacementModifiers.LEGACY_COUNT_EXTRA;
 	}
 }

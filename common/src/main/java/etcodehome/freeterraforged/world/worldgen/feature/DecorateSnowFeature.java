@@ -5,15 +5,17 @@ import java.util.function.Predicate;
 import org.jetbrains.annotations.Nullable;
 
 import com.mojang.serialization.Codec;
+import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.WorldGenLevel;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.GrassBlock;
 import net.minecraft.world.level.block.SnowLayerBlock;
-import net.minecraft.world.level.block.SpreadingSnowyDirtBlock;
+import net.minecraft.world.level.block.SpreadingSnowyBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.Property;
 import net.minecraft.world.level.chunk.ChunkAccess;
@@ -21,51 +23,60 @@ import net.minecraft.world.level.chunk.ChunkGenerator;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.level.levelgen.RandomState;
 import net.minecraft.world.level.levelgen.feature.Feature;
-import net.minecraft.world.level.levelgen.feature.FeaturePlaceContext;
-import net.minecraft.world.level.levelgen.feature.configurations.FeatureConfiguration;
 import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
 import etcodehome.freeterraforged.world.worldgen.FTFRandomState;
 import etcodehome.freeterraforged.world.worldgen.IChunkCellsHolder;
 import etcodehome.freeterraforged.world.worldgen.cell.Cell;
 import etcodehome.freeterraforged.world.worldgen.cell.heightmap.Levels;
 import etcodehome.freeterraforged.world.worldgen.cell.terrain.TerrainType;
-import etcodehome.freeterraforged.world.worldgen.feature.DecorateSnowFeature.Config;
 import etcodehome.freeterraforged.world.worldgen.noise.NoiseUtil;
 import etcodehome.freeterraforged.world.worldgen.noise.module.Noise;
 import etcodehome.freeterraforged.world.worldgen.noise.module.Noises;
 
-public class DecorateSnowFeature extends Feature<Config> {
+public class DecorateSnowFeature implements Feature {
+	public static final MapCodec<DecorateSnowFeature> CODEC = Config.MAP_CODEC.xmap(DecorateSnowFeature::new, DecorateSnowFeature::config);
+
     private static final float SNOW_ROCK_STEEPNESS = 0.45F;
     private static final float SNOW_ROCK_HEIGHT = 95.0F / 255.0F;
     private static final float MIN = min(SnowLayerBlock.LAYERS);
     private static final float MAX = max(SnowLayerBlock.LAYERS);
 
-	public DecorateSnowFeature(Codec<Config> codec) {
-		super(codec);
+	private final Config config;
+
+	public DecorateSnowFeature(Config config) {
+		this.config = config;
+	}
+
+	public Config config() {
+		return this.config;
 	}
 
 	@Override
-	public boolean place(FeaturePlaceContext<Config> placeContext) {
-		WorldGenLevel level = placeContext.level();
+	public MapCodec<DecorateSnowFeature> codec() {
+		return CODEC;
+	}
+
+	@Override
+	public boolean place(WorldGenLevel level, ChunkGenerator generator, RandomSource random, BlockPos origin) {
 		RandomState randomState = level.getLevel().getChunkSource().randomState();
 		
 		@Nullable
 		GeneratorContext generatorContext;
 		if((Object) randomState instanceof FTFRandomState ftfRandomState && (generatorContext = ftfRandomState.generatorContext()) != null) {
-			ChunkGenerator generator = placeContext.chunkGenerator();
-			ChunkPos chunkPos = new ChunkPos(placeContext.origin());
-			int chunkX = chunkPos.x;
-			int chunkZ = chunkPos.z;
+			ChunkPos chunkPos = ChunkPos.containing(origin);
+			int chunkX = chunkPos.x();
+			int chunkZ = chunkPos.z();
 			ChunkAccess chunk = level.getChunk(chunkX, chunkZ);
 			etcodehome.freeterraforged.world.worldgen.cell.heightmap.Heightmap heightmap = generatorContext.heightmap;
 			Levels levels = heightmap.levels();
 			Noise rand = Noises.white(heightmap.climate().randomSeed(), 1);
 			BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
-			Config config = placeContext.config();
+			Config config = this.config;
 			ScreeFeature.Config erodeConfig = config.erodeConfig();
 			Cell fallbackCell = new Cell();
 			IChunkCellsHolder cellsHolder = chunk instanceof IChunkCellsHolder h ? h : null;
 			Cell[] chunkCells = cellsHolder != null ? cellsHolder.freeterraforged$getOrCreateChunkCells(generatorContext) : null;
+			int seaLevel = generator.getSeaLevel();
 
 			for(int z = 0; z < 16; z++) {
 				for(int x = 0; x < 16; x++) {
@@ -80,11 +91,11 @@ public class DecorateSnowFeature extends Feature<Config> {
 					}
 					int scaledY = levels.scale(cell.height);
 			        int surfaceY = chunk.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z);
-			        if(Math.abs(scaledY - surfaceY) <= 2 && surfaceY >= generator.getSeaLevel()) {
+			        if(Math.abs(scaledY - surfaceY) <= 2 && surfaceY >= seaLevel) {
 				        pos.set(worldX, surfaceY, worldZ);
 				        
 				        if(config.erode) {
-				        	if(level.getBiome(pos).value().getTemperature(pos) <= 0.25) {
+				        	if(level.getBiome(pos).value().getTemperature(pos, seaLevel) <= 0.25) {
 					            if (cell.gradient == 0.0F) {
 					                generatorContext.lookup.computeSteepness(cell, worldX, worldZ);
 					            }
@@ -138,13 +149,13 @@ public class DecorateSnowFeature extends Feature<Config> {
     }
 
     private static void erodeSnow(ChunkAccess chunk, BlockPos.MutableBlockPos pos) {
-        chunk.setBlockState(pos, Blocks.AIR.defaultBlockState(), false);
+        chunk.setBlockState(pos, Blocks.AIR.defaultBlockState());
 
         if (pos.getY() > 0) {
             pos.setY(pos.getY() - 1);
             BlockState below = chunk.getBlockState(pos);
             if (below.hasProperty(GrassBlock.SNOWY)) {
-                chunk.setBlockState(pos, below.setValue(GrassBlock.SNOWY, false), false);
+                chunk.setBlockState(pos, below.setValue(GrassBlock.SNOWY, false));
             }
         }
     }
@@ -159,7 +170,7 @@ public class DecorateSnowFeature extends Feature<Config> {
             if (layer.is(Blocks.AIR)) {
                 return;
             }
-            chunk.setBlockState(pos, layer, false);
+            chunk.setBlockState(pos, layer);
 
             fixBaseBlock(chunk, pos, layer, level);
         }
@@ -172,8 +183,8 @@ public class DecorateSnowFeature extends Feature<Config> {
 
             // Turns to dirt if submerged or the light-level is low. Light hasn't been calc'd at this
             // at this stage of world-gen so just blanket set everything to snowy dirt.
-            if (below.getBlock() instanceof SpreadingSnowyDirtBlock) {
-                chunk.setBlockState(pos1, Blocks.DIRT.defaultBlockState(), false);
+            if (below.getBlock() instanceof SpreadingSnowyBlock) {
+                chunk.setBlockState(pos1, Blocks.DIRT.defaultBlockState());
             }
         }
     }
@@ -209,11 +220,12 @@ public class DecorateSnowFeature extends Feature<Config> {
         return property.getPossibleValues().stream().max(Integer::compareTo).orElse(0);
     }
 
-	public record Config(boolean erode, boolean smooth, ScreeFeature.Config erodeConfig) implements FeatureConfiguration {
-		public static final Codec<Config> CODEC = RecordCodecBuilder.create(instance -> instance.group(
+	public record Config(boolean erode, boolean smooth, ScreeFeature.Config erodeConfig) {
+		public static final MapCodec<Config> MAP_CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
 			Codec.BOOL.fieldOf("erode").forGetter(Config::erode),
 			Codec.BOOL.fieldOf("smooth").forGetter(Config::smooth),
 			ScreeFeature.Config.CODEC.fieldOf("erode_config").forGetter(Config::erodeConfig)
 		).apply(instance, Config::new));
+		public static final Codec<Config> CODEC = MAP_CODEC.codec();
 	}
 }

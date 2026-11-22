@@ -5,7 +5,7 @@ import java.util.List;
 import java.util.Objects;
 
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.ContainerObjectSelectionList;
 import net.minecraft.client.gui.components.events.GuiEventListener;
@@ -36,8 +36,15 @@ public class WidgetList<T extends AbstractWidget> extends ContainerObjectSelecti
     }
 
     @Override
-    protected boolean isSelectedItem(int i) {
-        return this.renderSelected && Objects.equals(this.getSelected(), this.children().get(i));
+    protected boolean entriesCanBeSelected() {
+        return this.renderSelected;
+    }
+
+    @Override
+    protected void extractSelection(GuiGraphicsExtractor graphics, Entry<T> entry, int outlineColor) {
+        if (this.renderSelected) {
+            super.extractSelection(graphics, entry, outlineColor);
+        }
     }
 
     @Override
@@ -46,7 +53,7 @@ public class WidgetList<T extends AbstractWidget> extends ContainerObjectSelecti
     }
 
     @Override
-    protected int getScrollbarPosition() {
+    protected int scrollBarX() {
         return this.getRowRight();
     }
 
@@ -67,15 +74,17 @@ public class WidgetList<T extends AbstractWidget> extends ContainerObjectSelecti
         }
 
         @Override
-        public void render(GuiGraphics guiGraphics, int index, int top, int left, int width, int height, int mouseX, int mouseY, boolean hovered, float partialTicks) {
+        public void extractContent(GuiGraphicsExtractor guiGraphics, int mouseX, int mouseY, boolean isHovered, float partialTicks) {
+            int width = this.getContentWidth();
+            int height = this.getContentHeight();
             int optionWidth = Math.min(396, width);
             int padding = (width - optionWidth) / 2;
-            widget.setX(left + padding);
-            widget.setY(top);
+            widget.setX(this.getContentX() + padding);
+            widget.setY(this.getContentY());
             widget.visible = true;
             widget.setWidth(optionWidth);
             widget.setHeight(height - 1);
-            widget.render(guiGraphics, mouseX, mouseY, partialTicks);
+            widget.extractRenderState(guiGraphics, mouseX, mouseY, partialTicks);
         }
 
 		@Override

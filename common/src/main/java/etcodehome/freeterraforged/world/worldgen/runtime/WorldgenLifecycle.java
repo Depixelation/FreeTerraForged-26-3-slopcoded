@@ -49,7 +49,7 @@ public final class WorldgenLifecycle {
 				rejected++;
 				FTFCommon.LOGGER.error(
 					"Rejected FTF worldgen input epoch for dimension={} resource_revision={} biome_replacement_revision={}; the previous immutable plan remains active",
-					level.dimension().location(), resourceRevision, biomeConfig.revision(), failure
+					level.dimension().identifier(), resourceRevision, biomeConfig.revision(), failure
 				);
 			}
 		}
@@ -126,7 +126,7 @@ public final class WorldgenLifecycle {
 		} catch (Exception failure) {
 			throw new IllegalStateException(
 				"Failed to recompile FTF worldgen plan after " + reason + " for "
-					+ level.dimension().location(),
+					+ level.dimension().identifier(),
 				failure
 			);
 		}

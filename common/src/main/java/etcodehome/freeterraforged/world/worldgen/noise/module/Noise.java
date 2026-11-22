@@ -5,16 +5,16 @@ import com.mojang.serialization.Codec;
 import com.mojang.serialization.MapCodec;
 import etcodehome.freeterraforged.registries.FTFRegistries;
 import net.minecraft.core.Holder;
-import net.minecraft.resources.RegistryFileCodec;
+import net.minecraft.core.registries.codec.RegistryCodecs;
 
 public interface Noise {
     public static final Codec<Noise> DIRECT_CODEC = Noises.DIRECT_CODEC;
-    public static final Codec<Holder<Noise>> CODEC = RegistryFileCodec.create(FTFRegistries.NOISE, DIRECT_CODEC);
+    public static final Codec<Holder<Noise>> CODEC = RegistryCodecs.holder(FTFRegistries.NOISE, DIRECT_CODEC);
     public static final Codec<Noise> HOLDER_HELPER_CODEC = CODEC.xmap(Noises.HolderHolder::new, noise -> {
         if (noise instanceof Noises.HolderHolder holderHolder) {
             return holderHolder.holder();
         }
-        return new Holder.Direct<>(noise);
+        return Holder.direct(noise);
     });
     
 	float compute(float x, float z, int seed);

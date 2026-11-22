@@ -1,4 +1,10 @@
-<meta name="google-site-verification" content="vnlMkKE-A9O0y9RNmKMsYMvDradutfetAfqSfI7bpyw" />
+This fork is a port of the FreeTerraForged 1.21.1_unstable branch from commit 16f68124d6de4f4654456008275efd344fc1c722 ported to 26.3 in Antigravity by Gemini Argon. The Fabric subproject for 26.3 compiles and runs, with overall generation and presets seemingly working. The mod has remained running without obvious issue on a Fabric 26.3 server for several days. However, no testing has been done beyond regular use by me in singleplayer and on the server, several non-breaking bugs are known to exist, and correctness and quality has not been human reviewed. The Neoforge subproject is not tested and presumed to be nonworking. This fork was made in the process of building a custom modpack for a personal server, and was not made with public use in mind. This repository is public only because I do not see any harm in making it so. No support nor further development is expected from me on this project.  
+
+I believe TerraBlender, Biolith, and Lithostitched jars need to be placed into libs/ manually if you wish to compile this project. 
+
+If the devs of any of the upstream projects wish for me to remove this repository, please let me know via the issue tracker.
+
+Original README follows below:  
 
 # FreeTerraForged
 A community driven fork of the Legendary ReTerraForged project for modern minecraft providing heavily customizable overworld terrain generation.

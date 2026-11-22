@@ -17,7 +17,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.core.QuartPos;
 import net.minecraft.core.SectionPos;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.biome.Biome;
@@ -63,7 +63,7 @@ public class MixinJigsawStructure {
 	private Holder<StructureTemplatePool> startPool;
 	@Shadow
 	@Final
-	private Optional<ResourceLocation> startJigsawName;
+	private Optional<Identifier> startJigsawName;
 	@Shadow
 	@Final
 	private int maxDepth;
@@ -78,7 +78,7 @@ public class MixinJigsawStructure {
 	private Optional<Heightmap.Types> projectStartToHeightmap;
 	@Shadow
 	@Final
-	private int maxDistanceFromCenter;
+	private JigsawStructure.MaxDistance maxDistanceFromCenter;
 	@Shadow
 	@Final
 	private List<PoolAliasBinding> poolAliases;
@@ -171,11 +171,11 @@ public class MixinJigsawStructure {
 	private boolean ftf$isValidBiome(Structure.GenerationContext generationContext, BlockPos position) {
 		Holder<Biome> biome = generationContext.chunkGenerator()
 			.getBiomeSource()
+			.createUncachedResolver(generationContext.randomState())
 			.getNoiseBiome(
 				QuartPos.fromBlock(position.getX()),
 				QuartPos.fromBlock(position.getY()),
-				QuartPos.fromBlock(position.getZ()),
-				generationContext.randomState().sampler()
+				QuartPos.fromBlock(position.getZ())
 			);
 		return generationContext.validBiome().test(biome);
 	}
@@ -269,11 +269,11 @@ public class MixinJigsawStructure {
 
 			Holder<Biome> biome = generationContext.chunkGenerator()
 					.getBiomeSource()
+					.createUncachedResolver(generationContext.randomState())
 					.getNoiseBiome(
 							QuartPos.fromBlock(candidateX),
 							QuartPos.fromBlock(surfaceY),
-							QuartPos.fromBlock(candidateZ),
-							generationContext.randomState().sampler()
+							QuartPos.fromBlock(candidateZ)
 					);
 
 			if (!generationContext.validBiome().test(biome)) {
@@ -323,7 +323,7 @@ public class MixinJigsawStructure {
 		FloorRange floorRange = ftf$sampleFloorRange(generationContext, originX, originZ);
 
 		int naiveTarget = Math.min(sampledY, floorRange.worst() - ftf$MARGIN);
-		int minWorldY = generationContext.heightAccessor().getMinBuildHeight() + this.dimensionPadding.bottom() + ftf$BOUNDARY_TOLERANCE;
+		int minWorldY = generationContext.heightAccessor().getMinY() + this.dimensionPadding.bottom() + ftf$BOUNDARY_TOLERANCE;
 		int maxLocalY = floorRange.best() - ftf$MARGIN;
 
 		int target = naiveTarget;
@@ -339,7 +339,8 @@ public class MixinJigsawStructure {
 		BlockPos blockPos = new BlockPos(originX, target, originZ);
 		Holder<Biome> biome = generationContext.chunkGenerator()
 				.getBiomeSource()
-				.getNoiseBiome(QuartPos.fromBlock(blockPos.getX()), QuartPos.fromBlock(blockPos.getY()), QuartPos.fromBlock(blockPos.getZ()), generationContext.randomState().sampler());
+				.createUncachedResolver(generationContext.randomState())
+				.getNoiseBiome(QuartPos.fromBlock(blockPos.getX()), QuartPos.fromBlock(blockPos.getY()), QuartPos.fromBlock(blockPos.getZ()));
 		if (!generationContext.validBiome().test(biome)) {
 			cir.setReturnValue(Optional.empty());
 			cir.cancel();
@@ -460,7 +461,7 @@ public class MixinJigsawStructure {
 
 	@Unique
 	private FloorRange ftf$sampleFloorRange(Structure.GenerationContext generationContext, int originX, int originZ) {
-		int radius = this.maxDistanceFromCenter;
+		int radius = this.maxDistanceFromCenter.horizontal();
 		int worst = Integer.MAX_VALUE;
 		int best = Integer.MIN_VALUE;
 		for (int xi = -ftf$GRID_STEPS_PER_SIDE; xi <= ftf$GRID_STEPS_PER_SIDE; xi++) {

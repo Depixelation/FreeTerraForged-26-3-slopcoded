@@ -8,7 +8,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import etcodehome.freeterraforged.world.worldgen.surface.rule.AcquiredSurfaceRule;
 
 public final class SurfaceRuleComposition {
@@ -61,6 +61,10 @@ public final class SurfaceRuleComposition {
 	}
 
 	private static void inspectRule(JsonElement rule, boolean bounded, Set<String> names, String path) {
+		if (rule != null && rule.isJsonPrimitive() && rule.getAsJsonPrimitive().isString()) {
+			if (!bounded) throw new IllegalArgumentException("Unbounded rule reference " + rule.getAsString() + " at " + path);
+			return;
+		}
 		var object = object(rule, path);
 		switch (type(object, path)) {
 			case "minecraft:sequence" -> {
@@ -71,7 +75,7 @@ public final class SurfaceRuleComposition {
 				boolean finite = inspectCondition(object.get("if_true"), false, bounded, names, path + ".if_true");
 				inspectRule(object.get("then_run"), bounded || finite, names, path + ".then_run");
 			}
-			case "minecraft:block", "minecraft:bandlands" -> {}
+			case "minecraft:block", "minecraft:bandlands", "minecraft:ore_vein" -> {}
 			case AcquiredSurfaceRule.TYPE -> inspectRule(object.get("root"), bounded, names, path + ".root");
 			default -> {
 				if (!bounded) throw new IllegalArgumentException("Unbounded rule " + type(object, path) + " at " + path);
@@ -80,10 +84,18 @@ public final class SurfaceRuleComposition {
 	}
 
 	private static boolean inspectCondition(JsonElement value, boolean negated, boolean bounded, Set<String> names, String path) {
+		if (value != null && value.isJsonPrimitive() && value.getAsJsonPrimitive().isString()) {
+			return false;
+		}
 		var object = object(value, path);
 		return switch (type(object, path)) {
 			case "minecraft:biome" -> {
-				for (var name : object.getAsJsonArray("biome_is")) names.add(ResourceLocation.parse(name.getAsString()).toString());
+				JsonElement biomeIs = object.get("biome_is");
+				if (biomeIs.isJsonArray()) {
+					for (var name : biomeIs.getAsJsonArray()) names.add(Identifier.parse(name.getAsString()).toString());
+				} else if (biomeIs.isJsonPrimitive() && biomeIs.getAsJsonPrimitive().isString() && !biomeIs.getAsString().startsWith("#")) {
+					names.add(Identifier.parse(biomeIs.getAsString()).toString());
+				}
 				yield !negated;
 			}
 			case "minecraft:not" -> inspectCondition(object.get("invert"), !negated, bounded, names, path + ".invert");
@@ -98,6 +110,7 @@ public final class SurfaceRuleComposition {
 	}
 
 	private static JsonElement specialize(JsonElement rule, String biome) {
+		if (!rule.isJsonObject()) return rule;
 		var object = rule.getAsJsonObject();
 		switch (type(object, "$surface")) {
 			case "minecraft:sequence": {
@@ -130,11 +143,17 @@ public final class SurfaceRuleComposition {
 	}
 
 	private static Boolean biomeTruth(JsonElement value, String biome) {
+		if (!value.isJsonObject()) return null;
 		var object = value.getAsJsonObject();
 		return switch (type(object, "$condition")) {
 			case "minecraft:biome" -> {
 				boolean matches = false;
-				for (var name : object.getAsJsonArray("biome_is")) matches |= ResourceLocation.parse(name.getAsString()).toString().equals(biome);
+				JsonElement biomeIs = object.get("biome_is");
+				if (biomeIs.isJsonArray()) {
+					for (var name : biomeIs.getAsJsonArray()) matches |= Identifier.parse(name.getAsString()).toString().equals(biome);
+				} else if (biomeIs.isJsonPrimitive() && biomeIs.getAsJsonPrimitive().isString() && !biomeIs.getAsString().startsWith("#")) {
+					matches = Identifier.parse(biomeIs.getAsString()).toString().equals(biome);
+				}
 				yield matches;
 			}
 			case "minecraft:not" -> {
@@ -146,11 +165,13 @@ public final class SurfaceRuleComposition {
 	}
 
 	private static boolean isEmpty(JsonElement value) {
-		return "minecraft:sequence".equals(type(value.getAsJsonObject(), "$surface"))
+		return value.isJsonObject()
+			&& "minecraft:sequence".equals(type(value.getAsJsonObject(), "$surface"))
 			&& value.getAsJsonObject().getAsJsonArray("sequence").isEmpty();
 	}
 
 	private static boolean isTotal(JsonElement value) {
+		if (!value.isJsonObject()) return false;
 		var object = value.getAsJsonObject();
 		return switch (type(object, "$surface")) {
 			case "minecraft:block", "minecraft:bandlands" -> true;
@@ -171,7 +192,7 @@ public final class SurfaceRuleComposition {
 
 	private static String type(JsonObject object, String path) {
 		if (!object.has("type")) throw new IllegalArgumentException("Missing rule/condition type at " + path);
-		return ResourceLocation.parse(object.get("type").getAsString()).toString();
+		return Identifier.parse(object.get("type").getAsString()).toString();
 	}
 
 	private static JsonObject biomes(Set<String> names) {

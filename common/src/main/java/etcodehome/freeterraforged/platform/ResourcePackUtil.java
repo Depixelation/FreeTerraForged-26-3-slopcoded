@@ -8,6 +8,13 @@ public final class ResourcePackUtil {
 
 	@ExpectPlatform
 	public static boolean isBundledModPack(PackResources pack) {
-		throw new IllegalStateException();
+		for (String pkg : new String[]{"fabric", "neoforge"}) {
+			try {
+				Class<?> impl = Class.forName("etcodehome.freeterraforged.platform." + pkg + ".ResourcePackUtilImpl");
+				return (Boolean) impl.getMethod("isBundledModPack", PackResources.class).invoke(null, pack);
+			} catch (ReflectiveOperationException ignored) {
+			}
+		}
+		return false;
 	}
 }

@@ -38,7 +38,7 @@ public record PreviewRequest(
 			biomeReplacementConfig, "biomeReplacementConfig"
 		);
 		contributionRevision = Objects.requireNonNull(contributionRevision, "contributionRevision");
-		if (!contributionRevision.dimension().equals(dimension.location())) {
+		if (!contributionRevision.dimension().equals(dimension.identifier())) {
 			throw new IllegalArgumentException("Contribution revision belongs to a different dimension");
 		}
 	}

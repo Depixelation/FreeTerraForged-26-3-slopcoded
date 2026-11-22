@@ -12,7 +12,7 @@ import com.google.gson.JsonObject;
 import com.mojang.serialization.JsonOps;
 
 import net.minecraft.core.BlockPos;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.util.Mth;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.levelgen.placement.HeightRangePlacement;
@@ -65,7 +65,7 @@ public final class DynamicHeightRangePlacement {
 		if (!classification.eligible() || classification.pipeline().heightRange() != placement) {
 			return Optional.empty();
 		}
-		Optional<ResourceLocation> featureId = classification.pipeline().featureId();
+		Optional<Identifier> featureId = classification.pipeline().featureId();
 		if (featureId.isEmpty()) {
 			return Optional.empty();
 		}
@@ -206,7 +206,7 @@ public final class DynamicHeightRangePlacement {
 		return Optional.empty();
 	}
 
-	private static long extensionSeed(PlacementContext context, ResourceLocation featureId, BlockPos origin, int baseY) {
+	private static long extensionSeed(PlacementContext context, Identifier featureId, BlockPos origin, int baseY) {
 		long seed = context.getLevel().getSeed();
 		seed ^= legacyPositionSeed(origin.getX(), baseY, origin.getZ());
 		seed ^= (long)featureId.getNamespace().hashCode() << 32;

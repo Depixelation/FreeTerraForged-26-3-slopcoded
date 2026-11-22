@@ -11,13 +11,13 @@ import java.util.Optional;
 import java.util.Set;
 
 import net.minecraft.core.Holder;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.biome.Biome;
 
 /** Immutable, owner-bound one-hop biome replacement decisions. */
 public final class BiomeReplacementPlan {
 	private final BiomeReplacementConfigSnapshot config;
-	private final ResourceLocation dimension;
+	private final Identifier dimension;
 	private final Map<Holder<Biome>, Decision> decisions;
 	private final Set<Holder<Biome>> removals;
 	private final Set<Holder<Biome>> replacementTargets;
@@ -26,7 +26,7 @@ public final class BiomeReplacementPlan {
 
 	BiomeReplacementPlan(
 		BiomeReplacementConfigSnapshot config,
-		ResourceLocation dimension,
+		Identifier dimension,
 		Map<Holder<Biome>, Decision> decisions,
 		Set<Holder<Biome>> removals,
 		Set<Holder<Biome>> replacementTargets,
@@ -53,7 +53,7 @@ public final class BiomeReplacementPlan {
 		return this.config;
 	}
 
-	public ResourceLocation dimension() {
+	public Identifier dimension() {
 		return this.dimension;
 	}
 
@@ -153,7 +153,7 @@ public final class BiomeReplacementPlan {
 	}
 
 	private static String biomeId(Holder<Biome> biome) {
-		return biome.unwrapKey().map(key -> key.location().toString()).orElse("<unregistered>");
+		return biome.unwrapKey().map(key -> key.identifier().toString()).orElse("<unregistered>");
 	}
 
 	public sealed interface Decision permits Replace, Remove, Keep {

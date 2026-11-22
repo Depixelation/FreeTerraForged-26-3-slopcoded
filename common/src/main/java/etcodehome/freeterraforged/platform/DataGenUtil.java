@@ -11,6 +11,17 @@ public final class DataGenUtil {
 
 	@ExpectPlatform
 	public static DataProvider createRegistryProvider(PackOutput output, CompletableFuture<RegistrySetBuilder.PatchedRegistries> registries) {
-		throw new IllegalStateException();
+		for (String pkg : new String[]{"fabric", "neoforge"}) {
+			try {
+				Class<?> impl = Class.forName("etcodehome.freeterraforged.platform." + pkg + ".DataGenUtilImpl");
+				return (DataProvider) impl.getMethod("createRegistryProvider", PackOutput.class, CompletableFuture.class).invoke(null, output, registries);
+			} catch (ClassNotFoundException | NoSuchMethodException ignored) {
+			} catch (ReflectiveOperationException ex) {
+				Throwable cause = ex.getCause() != null ? ex.getCause() : ex;
+				if (cause instanceof RuntimeException re) throw re;
+				throw new RuntimeException(cause);
+			}
+		}
+		throw new IllegalStateException("No platform DataGenUtilImpl found");
 	}
 }

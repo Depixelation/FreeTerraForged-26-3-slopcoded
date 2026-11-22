@@ -20,8 +20,11 @@ import net.minecraft.util.Mth;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.LevelReader;
 import net.minecraft.world.level.biome.Biome;
+import net.minecraft.world.level.biome.BiomeResolver;
 import net.minecraft.world.level.biome.BiomeSource;
 import net.minecraft.world.level.biome.Climate;
+import net.minecraft.world.level.levelgen.RandomState;
+import net.minecraft.world.level.levelgen.densityfunction.SamplerContext;
 
 final class UnifiedBiomeSource extends BiomeSource {
 	private static final int PARALLEL_QUERY_THRESHOLD = 1024;
@@ -68,15 +71,51 @@ final class UnifiedBiomeSource extends BiomeSource {
 			.orElseGet(this.acquisitionSource::possibleBiomes);
 	}
 
+	record Resolver(UnifiedBiomeSource source, Climate.Sampler sampler, BiomeResolver fallback) implements BiomeResolver {
+		@Override
+		public Holder<Biome> getNoiseBiome(int quartX, int quartY, int quartZ) {
+			TerraForgedChunkGenerator current = this.source.owner;
+			return current == null || current.plan().isEmpty()
+				? this.fallback.getNoiseBiome(quartX, quartY, quartZ)
+				: current.resolveBiome(quartX, quartY, quartZ, this.sampler);
+		}
+	}
+
 	@Override
+	public BiomeResolver createResolver(Climate.Sampler sampler) {
+		return new Resolver(this, sampler, this.acquisitionSource.createResolver(sampler));
+	}
+
 	public Holder<Biome> getNoiseBiome(int quartX, int quartY, int quartZ, Climate.Sampler sampler) {
 		TerraForgedChunkGenerator current = this.owner;
 		return current == null || current.plan().isEmpty()
-			? this.acquisitionSource.getNoiseBiome(quartX, quartY, quartZ, sampler)
+			? this.acquisitionSource.createResolver(sampler).getNoiseBiome(quartX, quartY, quartZ)
 			: current.resolveBiome(quartX, quartY, quartZ, sampler);
 	}
 
 	@Override
+	public Pair<BlockPos, Holder<Biome>> findBiomeHorizontal(
+		int x,
+		int y,
+		int z,
+		int radius,
+		Predicate<Holder<Biome>> predicate,
+		RandomSource random,
+		RandomState randomState
+	) {
+		WorldgenBiomeSelection.Executable selection = this.currentSelection();
+		int quartRadius = QuartPos.fromBlock(radius);
+		int width = quartRadius * 2 + 1;
+		long sampleCount = (long) width * width;
+		if (selection == null || width <= 0 || sampleCount > Integer.MAX_VALUE) {
+			return super.findBiomeHorizontal(x, y, z, radius, predicate, random, randomState);
+		}
+		return this.findBiomeHorizontal(
+			x, y, z, radius, predicate, random,
+			randomState.createClimateSampler(SamplerContext.builder().enableCaches().build())
+		);
+	}
+
 	public Pair<BlockPos, Holder<Biome>> findBiomeHorizontal(
 		int x,
 		int y,
@@ -91,7 +130,7 @@ final class UnifiedBiomeSource extends BiomeSource {
 		int width = quartRadius * 2 + 1;
 		long sampleCount = (long) width * width;
 		if (selection == null || width <= 0 || sampleCount > Integer.MAX_VALUE) {
-			return super.findBiomeHorizontal(x, y, z, radius, predicate, random, sampler);
+			return null;
 		}
 		int minQuartX = QuartPos.fromBlock(x) - quartRadius;
 		int minQuartZ = QuartPos.fromBlock(z) - quartRadius;
@@ -132,14 +171,34 @@ final class UnifiedBiomeSource extends BiomeSource {
 		int horizontalStep,
 		int verticalStep,
 		Predicate<Holder<Biome>> predicate,
-		Climate.Sampler sampler,
+		RandomState randomState,
 		LevelReader level
 	) {
 		WorldgenBiomeSelection.Executable selection = this.currentSelection();
 		if (selection == null) {
 			return super.findClosestBiome3d(
-				origin, radius, horizontalStep, verticalStep, predicate, sampler, level
+				origin, radius, horizontalStep, verticalStep, predicate, randomState, level
 			);
+		}
+		return this.findClosestBiome3d(
+			origin, radius, horizontalStep, verticalStep, predicate,
+			randomState.createClimateSampler(SamplerContext.builder().enableCaches().build()),
+			level
+		);
+	}
+
+	public Pair<BlockPos, Holder<Biome>> findClosestBiome3d(
+		BlockPos origin,
+		int radius,
+		int horizontalStep,
+		int verticalStep,
+		Predicate<Holder<Biome>> predicate,
+		Climate.Sampler sampler,
+		LevelReader level
+	) {
+		WorldgenBiomeSelection.Executable selection = this.currentSelection();
+		if (selection == null) {
+			return null;
 		}
 		Set<Holder<Biome>> matches = selection.possibleBiomes().stream()
 			.filter(predicate)
@@ -148,7 +207,7 @@ final class UnifiedBiomeSource extends BiomeSource {
 			return null;
 		}
 		int[] heights = Mth.outFromOrigin(
-			origin.getY(), level.getMinBuildHeight() + 1, level.getMaxBuildHeight(), verticalStep
+			origin.getY(), level.getMinY() + 1, level.getMaxY(), verticalStep
 		).toArray();
 		int horizontalRadius = Math.floorDiv(radius, horizontalStep);
 		List<BlockPos> ring = new ArrayList<>();

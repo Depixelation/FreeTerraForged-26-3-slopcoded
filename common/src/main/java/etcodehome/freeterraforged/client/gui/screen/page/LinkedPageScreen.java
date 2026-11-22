@@ -4,7 +4,7 @@ import java.util.Optional;
 
 import etcodehome.freeterraforged.client.gui.screen.presetconfig.PresetEditorPage;
 import etcodehome.freeterraforged.client.gui.widget.Label;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.CommonComponents;
@@ -83,9 +83,8 @@ public abstract class LinkedPageScreen extends Screen {
 	}
 
 	@Override
-	public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTicks) {
-		super.renderBackground(guiGraphics, mouseY, mouseY, partialTicks);
-		super.render(guiGraphics, mouseX, mouseY, partialTicks);
+	public void extractRenderState(GuiGraphicsExtractor guiGraphics, int mouseX, int mouseY, float partialTicks) {
+		super.extractRenderState(guiGraphics, mouseX, mouseY, partialTicks);
 	}
 	
 	@Override

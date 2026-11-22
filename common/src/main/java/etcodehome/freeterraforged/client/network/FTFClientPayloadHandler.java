@@ -15,7 +15,7 @@ public class FTFClientPayloadHandler {
 
     public static void handleFlowFieldSync(FlowFieldSyncPayload payload, Player player) {
         if (player != null && player.level() instanceof ClientLevel clientLevel) {
-            ChunkAccess chunk = clientLevel.getChunk(payload.pos().x, payload.pos().z, ChunkStatus.FULL, false);
+            ChunkAccess chunk = clientLevel.getChunk(payload.pos().x(), payload.pos().z(), ChunkStatus.FULL, false);
             if (chunk instanceof IFlowFieldHolder holder) {
                 holder.freeterraforged$getOrCreateFlowField().loadRawGrid(payload.rawGrid());
 			}

@@ -14,7 +14,7 @@ import java.util.Set;
 import com.mojang.datafixers.util.Pair;
 import net.minecraft.core.Holder;
 import net.minecraft.resources.ResourceKey;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.biome.BiomeGenerationSettings;
 import net.minecraft.world.level.biome.Climate;
@@ -22,7 +22,8 @@ import net.minecraft.world.level.biome.FeatureSorter;
 import net.minecraft.util.Mth;
 import net.minecraft.world.level.levelgen.GenerationStep;
 import net.minecraft.world.level.levelgen.NoiseGeneratorSettings;
-import net.minecraft.world.level.levelgen.carver.ConfiguredWorldCarver;
+import net.minecraft.world.level.levelgen.carver.WorldCarver;
+import net.minecraft.world.level.levelgen.material.rule.MaterialRule;
 import net.minecraft.world.level.levelgen.placement.PlacedFeature;
 import etcodehome.freeterraforged.world.worldgen.feature.placement.ChunkLocalPlacementClassifier;
 import etcodehome.freeterraforged.world.worldgen.feature.placement.SurfacePlacementClassifier.Classification;
@@ -89,7 +90,7 @@ public final class WorldgenPlans {
 				.sorted(Comparator.comparingInt(CandidateCompositionStage::order)
 					.thenComparing(stage -> stage.id().toString()))
 				.toList();
-			Set<ResourceLocation> ids = new HashSet<>();
+			Set<Identifier> ids = new HashSet<>();
 			if (stages.stream().anyMatch(stage -> !ids.add(stage.id()))) {
 				throw new IllegalArgumentException("Candidate-composition stage IDs must be unique");
 			}
@@ -123,7 +124,7 @@ public final class WorldgenPlans {
 	}
 
 	public record CandidateCompositionStage(
-		ResourceLocation id,
+		Identifier id,
 		int order,
 		BiomeCandidateComposer composer
 	) {
@@ -147,12 +148,12 @@ public final class WorldgenPlans {
 		private final PlanDescriptor descriptor;
 		private final long salt;
 		private final List<ProviderDomain> providers;
-		private final Optional<ResourceLocation> rootCompositionDomain;
+		private final Optional<Identifier> rootCompositionDomain;
 		private final Optional<Climate.ParameterList<Holder<Biome>>> fallback;
 		private final Optional<Holder<Biome>> deferredPlaceholder;
 		private final Optional<BiomeSourcePlanInput> directInput;
-		private final Map<ResourceLocation, ProviderDomain> providersById;
-		private final Map<ResourceLocation, OceanClimateProjection> oceanProjections;
+		private final Map<Identifier, ProviderDomain> providersById;
+		private final Map<Identifier, OceanClimateProjection> oceanProjections;
 		private final OceanClimateProjection fallbackOceanProjection;
 		private final WeightedRendezvous.Selector selector;
 
@@ -160,7 +161,7 @@ public final class WorldgenPlans {
 			PlanDescriptor descriptor,
 			long salt,
 			List<ProviderDomain> providers,
-			Optional<ResourceLocation> rootCompositionDomain,
+			Optional<Identifier> rootCompositionDomain,
 			Optional<Climate.ParameterList<Holder<Biome>>> fallback,
 			Optional<Holder<Biome>> deferredPlaceholder
 		) {
@@ -174,7 +175,7 @@ public final class WorldgenPlans {
 			PlanDescriptor descriptor,
 			long salt,
 			List<ProviderDomain> providers,
-			Optional<ResourceLocation> rootCompositionDomain,
+			Optional<Identifier> rootCompositionDomain,
 			Optional<Climate.ParameterList<Holder<Biome>>> fallback,
 			Optional<Holder<Biome>> deferredPlaceholder,
 			Optional<BiomeSourcePlanInput> directInput
@@ -189,14 +190,14 @@ public final class WorldgenPlans {
 			this.fallback = Objects.requireNonNull(fallback, "fallback");
 			this.deferredPlaceholder = Objects.requireNonNull(deferredPlaceholder, "deferredPlaceholder");
 			this.directInput = Objects.requireNonNull(directInput, "directInput");
-			LinkedHashMap<ResourceLocation, ProviderDomain> byId = new LinkedHashMap<>();
+			LinkedHashMap<Identifier, ProviderDomain> byId = new LinkedHashMap<>();
 			for (ProviderDomain provider : this.providers) {
 				if (byId.putIfAbsent(provider.id(), provider) != null) {
 					throw new IllegalArgumentException("Provider domain IDs must be unique");
 				}
 			}
 			this.providersById = Collections.unmodifiableMap(byId);
-			LinkedHashMap<ResourceLocation, OceanClimateProjection> projections = new LinkedHashMap<>();
+			LinkedHashMap<Identifier, OceanClimateProjection> projections = new LinkedHashMap<>();
 			for (ProviderDomain provider : this.providers) {
 				projections.put(provider.id(), OceanClimateProjection.from(provider.candidates()));
 			}
@@ -218,7 +219,7 @@ public final class WorldgenPlans {
 					"A direct custom source root cannot share candidate-provider state"
 				);
 			}
-			ResourceLocation rootDomain = this.rootCompositionDomain.orElse(null);
+			Identifier rootDomain = this.rootCompositionDomain.orElse(null);
 			if (rootDomain != null && !this.providersById.containsKey(rootDomain)) {
 				throw new IllegalArgumentException("Root composition domain is not a provider domain");
 			}
@@ -249,7 +250,7 @@ public final class WorldgenPlans {
 			return this.providers;
 		}
 
-		public Optional<ResourceLocation> rootCompositionDomain() {
+		public Optional<Identifier> rootCompositionDomain() {
 			return this.rootCompositionDomain;
 		}
 
@@ -272,12 +273,12 @@ public final class WorldgenPlans {
 			return Optional.of(this.resolveProvider(this.selector.select(cellX, cellZ), target));
 		}
 
-		public Optional<ProviderResult> resolve(ResourceLocation domain, Climate.TargetPoint target) {
+		public Optional<ProviderResult> resolve(Identifier domain, Climate.TargetPoint target) {
 			ProviderDomain provider = this.providersById.get(domain);
 			return provider == null ? Optional.empty() : Optional.of(this.resolveProvider(provider, target));
 		}
 
-		public ProviderResult resolveRequired(ResourceLocation domain, Climate.TargetPoint target) {
+		public ProviderResult resolveRequired(Identifier domain, Climate.TargetPoint target) {
 			ProviderDomain provider = this.providersById.get(domain);
 			if (provider == null) {
 				throw new IllegalArgumentException("Unknown provider domain " + domain);
@@ -286,7 +287,7 @@ public final class WorldgenPlans {
 		}
 
 		public Climate.TargetPoint projectTarget(
-			ResourceLocation domain,
+			Identifier domain,
 			boolean fallback,
 			Climate.TargetPoint target
 		) {
@@ -303,7 +304,7 @@ public final class WorldgenPlans {
 			return projection.apply(target);
 		}
 
-		public ResourceLocation selectDomain(long cellX, long cellZ) {
+		public Identifier selectDomain(long cellX, long cellZ) {
 			if (this.selector == null) {
 				throw new IllegalStateException("Cannot assign a provider from an empty plan");
 			}
@@ -362,7 +363,7 @@ public final class WorldgenPlans {
 	}
 
 	public record ProviderResult(
-		ResourceLocation domain,
+		Identifier domain,
 		Holder<Biome> baseBiome,
 		Holder<Biome> biome,
 		boolean usedFallback,
@@ -377,7 +378,7 @@ public final class WorldgenPlans {
 			target = Objects.requireNonNull(target, "target");
 		}
 
-		public ProviderResult(ResourceLocation domain, Holder<Biome> biome, boolean usedFallback) {
+		public ProviderResult(Identifier domain, Holder<Biome> biome, boolean usedFallback) {
 			this(
 				domain, biome, biome, usedFallback,
 				new Climate.ParameterList<>(List.of(Pair.of(
@@ -456,7 +457,7 @@ public final class WorldgenPlans {
 	}
 
 	public record ProviderDomain(
-		ResourceLocation id,
+		Identifier id,
 		double weight,
 		Climate.ParameterList<Holder<Biome>> candidates,
 		int registrationOrder
@@ -496,13 +497,13 @@ public final class WorldgenPlans {
 					.thenComparing(stage -> stage.id().toString()))
 				.toList();
 			possibleOutputs = Collections.unmodifiableSet(new java.util.LinkedHashSet<>(possibleOutputs));
-			Set<ResourceLocation> ids = new HashSet<>();
+			Set<Identifier> ids = new HashSet<>();
 			if (stages.stream().anyMatch(stage -> !ids.add(stage.id()))) {
 				throw new IllegalArgumentException("Selection decorator stage IDs must be unique");
 			}
 		}
 
-		public List<ResourceLocation> orderedDecorators() {
+		public List<Identifier> orderedDecorators() {
 			return this.stages.stream().map(SelectionDecoratorStage::id).toList();
 		}
 
@@ -548,7 +549,7 @@ public final class WorldgenPlans {
 	}
 
 	public record SelectionDecoratorStage(
-		ResourceLocation id,
+		Identifier id,
 		int order,
 		BiomeSelectionDecorator decorator
 	) {
@@ -590,7 +591,7 @@ public final class WorldgenPlans {
 		SpatialResult resolve(long cellX, long cellZ);
 	}
 
-	public record SpatialResult(ResourceLocation domain, long cellX, long cellZ) {
+	public record SpatialResult(Identifier domain, long cellX, long cellZ) {
 		public SpatialResult {
 			domain = Objects.requireNonNull(domain, "domain");
 		}
@@ -625,7 +626,7 @@ public final class WorldgenPlans {
 				.sorted(Comparator.comparingInt(SamplerDecoratorStage::order)
 					.thenComparing(stage -> stage.id().toString()))
 				.toList();
-			Set<ResourceLocation> ids = new HashSet<>();
+			Set<Identifier> ids = new HashSet<>();
 			if (stages.stream().anyMatch(stage -> !ids.add(stage.id()))) {
 				throw new IllegalArgumentException("Sampler decorator stage IDs must be unique");
 			}
@@ -687,7 +688,7 @@ public final class WorldgenPlans {
 	}
 
 	public record SamplerDecoratorStage(
-		ResourceLocation id,
+		Identifier id,
 		int order,
 		SamplerDecorator decorator
 	) {
@@ -739,13 +740,13 @@ public final class WorldgenPlans {
 
 	public record Surface(
 		PlanDescriptor descriptor,
-		Optional<net.minecraft.world.level.levelgen.SurfaceRules.RuleSource> root,
+		Optional<MaterialRule> root,
 		List<SurfaceRuleTransformStage> transforms,
-		List<ResourceLocation> appliedTransforms
+		List<Identifier> appliedTransforms
 	) implements DomainPlan {
 		public Surface(
 			PlanDescriptor descriptor,
-			Optional<net.minecraft.world.level.levelgen.SurfaceRules.RuleSource> root
+			Optional<MaterialRule> root
 		) {
 			this(descriptor, root, List.of(), List.of());
 		}
@@ -759,7 +760,7 @@ public final class WorldgenPlans {
 					.thenComparing(stage -> stage.id().toString()))
 				.toList();
 			appliedTransforms = List.copyOf(appliedTransforms);
-			Set<ResourceLocation> ids = new HashSet<>(appliedTransforms);
+			Set<Identifier> ids = new HashSet<>(appliedTransforms);
 			if (ids.size() != appliedTransforms.size()
 				|| transforms.stream().anyMatch(stage -> !ids.add(stage.id()))) {
 				throw new IllegalArgumentException("Surface transform IDs must be unique across pending and applied stages");
@@ -785,7 +786,7 @@ public final class WorldgenPlans {
 			var current = this.root.orElseThrow(
 				() -> new IllegalStateException("Surface transforms require one surface-rule root")
 			);
-			List<ResourceLocation> applied = new java.util.ArrayList<>(this.appliedTransforms);
+			List<Identifier> applied = new java.util.ArrayList<>(this.appliedTransforms);
 			for (SurfaceRuleTransformStage stage : this.transforms) {
 				current = Objects.requireNonNull(
 					stage.transform().apply(current),
@@ -798,9 +799,9 @@ public final class WorldgenPlans {
 	}
 
 	public record SurfaceRuleTransformStage(
-		ResourceLocation id,
+		Identifier id,
 		int order,
-		java.util.function.UnaryOperator<net.minecraft.world.level.levelgen.SurfaceRules.RuleSource> transform
+		java.util.function.UnaryOperator<MaterialRule> transform
 	) {
 		public SurfaceRuleTransformStage {
 			id = Objects.requireNonNull(id, "id");
@@ -814,7 +815,7 @@ public final class WorldgenPlans {
 	public record Carvers(
 		PlanDescriptor descriptor,
 		List<CarverPipeline> pipelines,
-		Map<ResourceKey<Biome>, Map<GenerationStep.Carving, List<Holder<ConfiguredWorldCarver<?>>>>> byBiome
+		Map<ResourceKey<Biome>, List<Holder<WorldCarver>>> byBiome
 	) implements DomainPlan {
 		public Carvers(PlanDescriptor descriptor, List<CarverPipeline> pipelines) {
 			this(descriptor, pipelines, indexCarvers(pipelines));
@@ -823,36 +824,36 @@ public final class WorldgenPlans {
 		public Carvers {
 			descriptor = validateDescriptor(descriptor, WorldgenFacet.CARVERS);
 			pipelines = List.copyOf(pipelines);
-			byBiome = immutableNestedMap(byBiome);
+			Map<ResourceKey<Biome>, List<Holder<WorldCarver>>> copied = new LinkedHashMap<>();
+			Objects.requireNonNull(byBiome, "indexed carvers").forEach((biome, list) ->
+				copied.put(Objects.requireNonNull(biome, "carver biome"), List.copyOf(list))
+			);
+			byBiome = Map.copyOf(copied);
 		}
 
-		public List<Holder<ConfiguredWorldCarver<?>>> forBiome(
-			Holder<Biome> biome,
-			GenerationStep.Carving step
+		public List<Holder<WorldCarver>> forBiome(
+			Holder<Biome> biome
 		) {
 			ResourceKey<Biome> key = biome.unwrapKey().orElseThrow(
 				() -> new IllegalStateException("Carver stage selected an unkeyed biome")
 			);
-			return this.forBiome(key, step);
+			return this.forBiome(key);
 		}
 
-		public List<Holder<ConfiguredWorldCarver<?>>> forBiome(
-			ResourceKey<Biome> biome,
-			GenerationStep.Carving step
+		public List<Holder<WorldCarver>> forBiome(
+			ResourceKey<Biome> biome
 		) {
-			return this.byBiome.getOrDefault(biome, Map.of()).getOrDefault(step, List.of());
+			return this.byBiome.getOrDefault(biome, List.of());
 		}
 	}
 
 	public record CarverPipeline(
 		ResourceKey<Biome> biome,
-		GenerationStep.Carving step,
 		int index,
-		Holder<ConfiguredWorldCarver<?>> carver
+		Holder<WorldCarver> carver
 	) {
 		public CarverPipeline {
 			biome = Objects.requireNonNull(biome, "biome");
-			step = Objects.requireNonNull(step, "step");
 			if (index < 0) {
 				throw new IllegalArgumentException("Carver index must be non-negative");
 			}
@@ -1017,28 +1018,22 @@ public final class WorldgenPlans {
 		TRAIL_RUINS
 	}
 
-	private static Map<ResourceKey<Biome>, Map<GenerationStep.Carving, List<Holder<ConfiguredWorldCarver<?>>>>> indexCarvers(
+	private static Map<ResourceKey<Biome>, List<Holder<WorldCarver>>> indexCarvers(
 		List<CarverPipeline> pipelines
 	) {
-		Map<ResourceKey<Biome>, Map<GenerationStep.Carving, List<CarverPipeline>>> grouped = new LinkedHashMap<>();
+		Map<ResourceKey<Biome>, List<CarverPipeline>> grouped = new LinkedHashMap<>();
 		for (CarverPipeline pipeline : List.copyOf(pipelines)) {
-			grouped.computeIfAbsent(pipeline.biome(), ignored -> new java.util.EnumMap<>(GenerationStep.Carving.class))
-				.computeIfAbsent(pipeline.step(), ignored -> new java.util.ArrayList<>())
+			grouped.computeIfAbsent(pipeline.biome(), ignored -> new java.util.ArrayList<>())
 				.add(pipeline);
 		}
-		Map<ResourceKey<Biome>, Map<GenerationStep.Carving, List<Holder<ConfiguredWorldCarver<?>>>>> indexed =
+		Map<ResourceKey<Biome>, List<Holder<WorldCarver>>> indexed =
 			new LinkedHashMap<>();
-		grouped.forEach((biome, steps) -> {
-			Map<GenerationStep.Carving, List<Holder<ConfiguredWorldCarver<?>>>> values =
-				new java.util.EnumMap<>(GenerationStep.Carving.class);
-			steps.forEach((step, occurrences) -> {
-				occurrences.sort(Comparator.comparingInt(CarverPipeline::index));
-				validateContiguousIndices(
-					"carver", biome, step.ordinal(), occurrences.stream().map(CarverPipeline::index).toList()
-				);
-				values.put(step, occurrences.stream().map(CarverPipeline::carver).toList());
-			});
-			indexed.put(biome, Map.copyOf(values));
+		grouped.forEach((biome, occurrences) -> {
+			occurrences.sort(Comparator.comparingInt(CarverPipeline::index));
+			validateContiguousIndices(
+				"carver", biome, 0, occurrences.stream().map(CarverPipeline::index).toList()
+			);
+			indexed.put(biome, occurrences.stream().map(CarverPipeline::carver).toList());
 		});
 		return Map.copyOf(indexed);
 	}
@@ -1086,7 +1081,7 @@ public final class WorldgenPlans {
 			if (conflicted.contains(feature)) {
 				continue;
 			}
-			String id = key.orElseThrow().location().toString();
+			String id = key.orElseThrow().identifier().toString();
 			String previous = identities.putIfAbsent(feature, id);
 			if (previous != null && !previous.equals(id)) {
 				conflicted.add(feature);
@@ -1139,7 +1134,7 @@ public final class WorldgenPlans {
 		for (int expected = 0; expected < indices.size(); expected++) {
 			if (indices.get(expected) != expected) {
 				throw new IllegalArgumentException(
-					"Non-contiguous " + domain + " occurrence index for " + biome.location()
+					"Non-contiguous " + domain + " occurrence index for " + biome.identifier()
 						+ " step " + step + ": expected " + expected + ", got " + indices.get(expected)
 				);
 			}

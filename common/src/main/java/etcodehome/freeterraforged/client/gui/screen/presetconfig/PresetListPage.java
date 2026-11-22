@@ -22,10 +22,11 @@ import com.mojang.serialization.DataResult;
 import com.mojang.serialization.JsonOps;
 import io.netty.util.internal.StringUtil;
 import net.minecraft.ChatFormatting;
-import net.minecraft.Util;
+import net.minecraft.util.Util;
+import com.mojang.blaze3d.Blaze3D;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
@@ -98,9 +99,9 @@ public class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWid
 			boolean isSameName = selectedEntry != null && selectedEntry.getRawName().equalsIgnoreCase(trimmed);
 			boolean isValid = this.isValidPresetName(trimmed);
 
-			final int white = 14737632;
+			final int white = 0xFFFFFFFF;
 			final int red = 0xFFFF3F30;
-			final int darkGray = 0x7E7E7E;
+			final int darkGray = 0xFF7E7E7E;
 
 			if (this.createPreset != null) this.createPreset.active = isValid;
 			if (this.renamePreset != null) this.renamePreset.active = selectedEntry != null && !selectedEntry.isBuiltin() && isValid;
@@ -206,12 +207,12 @@ public class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWid
 					folderToOpen = parent;
 				}
 			}
-			Util.getPlatform().openUri(folderToOpen.toUri());
+			Blaze3D.openPath(folderToOpen);
 			this.rebuildPresets();
 		});
 
 		this.openExportFolder = PresetWidgets.createThrowingButton(FTFTranslationKeys.GUI_BUTTON_OPEN_EXPORT_FOLDER, () -> {
-			Util.getPlatform().openUri(EXPORT_PATH.toUri());
+			Blaze3D.openPath(EXPORT_PATH);
 			this.rebuildPresets();
 		});
 
@@ -533,7 +534,7 @@ public class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWid
 		}
 
 		@Override
-		public void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+		public void extractWidgetRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
 			// Intentional no-op: invisible spacer
 		}
 
@@ -552,7 +553,7 @@ public class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWid
 		}
 
 		@Override
-		public void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+		public void extractWidgetRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
 			int x = this.getX();
 			int y = this.getY();
 			int w = this.getWidth();
@@ -567,7 +568,7 @@ public class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWid
 
 			// Center-aligned category title
 			Font font = Minecraft.getInstance().font;
-			graphics.drawCenteredString(font, this.title, x + w / 2, y + (h - 8) / 2, 0xFFFFFF);
+			graphics.centeredText(font, this.title, x + w / 2, y + (h - 8) / 2, 0xFFFFFFFF);
 		}
 
 		@Override
@@ -582,9 +583,9 @@ public class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWid
 		}
 
 		@Override
-		public void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+		public void extractContents(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
 			Font font = Minecraft.getInstance().font;
-			graphics.drawCenteredString(font, this.getMessage(), this.getX() + this.getWidth() / 2, this.getY() + (this.getHeight() - 8) / 2, 0x808080);
+			graphics.centeredText(font, this.getMessage(), this.getX() + this.getWidth() / 2, this.getY() + (this.getHeight() - 8) / 2, 0xFF808080);
 		}
 	}
 
@@ -607,12 +608,12 @@ public class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWid
 		}
 
 		@Override
-		public void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+		public void extractWidgetRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
 			int wrapWidth = Math.max(10, this.getWidth() - 8);
 			List<FormattedCharSequence> lines = this.font.split(this.text, wrapWidth);
 			int y = this.getY() + 3;
 			for (FormattedCharSequence line : lines) {
-				graphics.drawString(this.font, line, this.getX() + 4, y, 0xFFFFFF);
+				graphics.text(this.font, line, this.getX() + 4, y, 0xFFFFFFFF);
 				y += 10;
 			}
 		}
@@ -715,19 +716,19 @@ public class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWid
 		}
 
 		@Override
-		public void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+		public void extractContents(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
 			Font font = Minecraft.getInstance().font;
 			int x = this.getX();
 			int y = this.getY();
 			int w = this.getWidth();
 
-			int textColor = this.isHoveredOrFocused() ? 0xFFFFFF : 0xE0E0E0;
+			int textColor = this.isHoveredOrFocused() ? 0xFFFFFFFF : 0xFFE0E0E0;
 
 			// 1. Main Title centered near top of entry slot
 			Component title = this.defaultPreset
 					? this.displayName.copy().append(Component.literal(" ★").withStyle(ChatFormatting.GOLD))
 					: this.displayName;
-			graphics.drawCenteredString(font, title, x + w / 2, y + 2, textColor);
+			graphics.centeredText(font, title, x + w / 2, y + 2, textColor);
 
 			// 2. Small subtext tag centered underneath (with last modified timestamp from presentation settings)
 			Component baseSubtext;
@@ -744,11 +745,11 @@ public class PresetListPage extends BisectedPage<PresetConfigScreen, AbstractWid
 					? Component.literal(baseSubtext.getString() + " • " + lastModified).withStyle(ChatFormatting.DARK_GRAY)
 					: baseSubtext.copy().withStyle(ChatFormatting.DARK_GRAY);
 
-			graphics.pose().pushPose();
-			graphics.pose().translate(x + w / 2.0f, y + 12.0f, 0.0f);
-			graphics.pose().scale(0.6f, 0.6f, 0.8f);
-			graphics.drawCenteredString(font, subtext, 0, 0, 0xFFFFFF);
-			graphics.pose().popPose();
+			graphics.pose().pushMatrix();
+			graphics.pose().translate(x + w / 2.0f, y + 12.0f);
+			graphics.pose().scale(0.6f, 0.6f);
+			graphics.centeredText(font, subtext, 0, 0, 0xFFFFFFFF);
+			graphics.pose().popMatrix();
 		}
 
 		public void save() throws IOException {

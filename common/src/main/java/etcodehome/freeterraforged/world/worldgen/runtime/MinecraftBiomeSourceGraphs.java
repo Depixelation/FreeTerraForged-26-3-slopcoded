@@ -12,7 +12,7 @@ import net.minecraft.core.HolderLookup;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.RegistryOps;
 import net.minecraft.resources.ResourceKey;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.biome.BiomeSource;
 import net.minecraft.world.level.biome.Climate;
@@ -64,7 +64,7 @@ public final class MinecraftBiomeSourceGraphs {
 		if (presetElement == null || !presetElement.isJsonPrimitive()) {
 			throw new IllegalStateException("Selected multi-noise codec graph has neither biomes nor preset: " + encoded);
 		}
-		ResourceLocation presetId = ResourceLocation.tryParse(presetElement.getAsString());
+		Identifier presetId = Identifier.tryParse(presetElement.getAsString());
 		if (presetId == null) {
 			throw new IllegalStateException("Invalid multi-noise preset identity: " + presetElement);
 		}

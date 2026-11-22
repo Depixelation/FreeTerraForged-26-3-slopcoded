@@ -1,19 +1,19 @@
 package etcodehome.freeterraforged.world.worldgen.feature;
 
-import com.mojang.serialization.Codec;
+import com.mojang.serialization.MapCodec;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.SectionPos;
+import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.WorldGenLevel;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.ChunkAccess;
+import net.minecraft.world.level.chunk.ChunkGenerator;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.level.levelgen.RandomState;
 import net.minecraft.world.level.levelgen.feature.Feature;
-import net.minecraft.world.level.levelgen.feature.FeaturePlaceContext;
-import net.minecraft.world.level.levelgen.feature.configurations.NoneFeatureConfiguration;
 import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
 import etcodehome.freeterraforged.world.worldgen.FTFRandomState;
 import etcodehome.freeterraforged.world.worldgen.IChunkCellsHolder;
@@ -25,7 +25,9 @@ import etcodehome.freeterraforged.world.worldgen.densityfunction.CellSampler;
 
 import java.util.Arrays;
 
-public class RiverGasketFeature extends Feature<NoneFeatureConfiguration> {
+public class RiverGasketFeature implements Feature {
+    public static final RiverGasketFeature INSTANCE = new RiverGasketFeature();
+    public static final MapCodec<RiverGasketFeature> CODEC = MapCodec.unit(INSTANCE);
 
     // Pre-allocated array of 256 Cells per thread (zero allocation during worldgen)
     private static final ThreadLocal<Cell[]> CHUNK_CELLS = ThreadLocal.withInitial(() -> {
@@ -58,13 +60,16 @@ public class RiverGasketFeature extends Feature<NoneFeatureConfiguration> {
         final BlockPos.MutableBlockPos testSide = new BlockPos.MutableBlockPos();
     }
 
-    public RiverGasketFeature(Codec<NoneFeatureConfiguration> codec) {
-        super(codec);
+    public RiverGasketFeature() {
     }
 
     @Override
-    public boolean place(FeaturePlaceContext<NoneFeatureConfiguration> placeContext) {
-        WorldGenLevel level = placeContext.level();
+    public MapCodec<RiverGasketFeature> codec() {
+        return CODEC;
+    }
+
+    @Override
+    public boolean place(WorldGenLevel level, ChunkGenerator chunkGenerator, RandomSource random, BlockPos origin) {
         RandomState randomState = level.getLevel().getChunkSource().randomState();
 
         if (!((Object) randomState instanceof FTFRandomState ftfRandomState)) {
@@ -76,7 +81,6 @@ public class RiverGasketFeature extends Feature<NoneFeatureConfiguration> {
             return false;
         }
 
-        BlockPos origin = placeContext.origin();
         int chunkX = SectionPos.blockToSectionCoord(origin.getX());
         int chunkZ = SectionPos.blockToSectionCoord(origin.getZ());
         int minBlockX = SectionPos.sectionToBlockCoord(chunkX);
@@ -163,7 +167,7 @@ public class RiverGasketFeature extends Feature<NoneFeatureConfiguration> {
                     Heightmap.Types.OCEAN_FLOOR_WG,
                     blockX, blockZ
             );
-            if (columnTopY >= level.getMinBuildHeight()) {
+            if (columnTopY >= level.getMinY()) {
                 pos.sample.set(blockX, columnTopY, blockZ);
                 BlockState topState = level.getBlockState(pos.sample);
                 if (!topState.isAir() && !topState.is(Blocks.CAVE_AIR) && !topState.is(Blocks.WATER)) {
@@ -196,7 +200,7 @@ public class RiverGasketFeature extends Feature<NoneFeatureConfiguration> {
                     }
 
                     // Gasket HORIZONTAL
-                    int radius = placeContext.random().nextInt(5) + 3;
+                    int radius = random.nextInt(5) + 3;
                     int radiusSq = radius * radius;
 
                     for (int dx = -radius; dx <= radius; dx++) {

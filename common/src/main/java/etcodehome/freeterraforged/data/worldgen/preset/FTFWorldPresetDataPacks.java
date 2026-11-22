@@ -32,7 +32,7 @@ public final class FTFWorldPresetDataPacks {
 		return levelType != null && (
 			levelType.equalsIgnoreCase(FTFWorldPresets.SERVER_LEVEL_TYPE)
 				|| levelType.equalsIgnoreCase(FTFWorldPresets.LEGACY_SERVER_LEVEL_TYPE)
-				|| levelType.equalsIgnoreCase(FTFWorldPresets.FREETERRAFORGED.location().toString())
+				|| levelType.equalsIgnoreCase(FTFWorldPresets.FREETERRAFORGED.identifier().toString())
 		);
 	}
 
@@ -90,7 +90,7 @@ public final class FTFWorldPresetDataPacks {
 		HolderLookup.Provider registries
 	) throws IOException {
 		if (registries == null) {
-			registries = VanillaRegistries.createLookup();
+			registries = VanillaRegistries.createWorldLookup();
 		}
 		Path datagenPath = Files.createTempDirectory("datagen-target-");
 		Path datagenOutputPath = datagenPath.resolve("output");

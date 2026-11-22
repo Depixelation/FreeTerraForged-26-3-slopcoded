@@ -11,7 +11,7 @@ import java.util.function.BooleanSupplier;
 
 import net.minecraft.core.Holder;
 import net.minecraft.resources.ResourceKey;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.WorldDataConfiguration;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.dimension.LevelStem;
@@ -28,7 +28,7 @@ import etcodehome.freeterraforged.world.worldgen.runtime.WorldgenContributionRev
 import etcodehome.freeterraforged.world.worldgen.runtime.WorldgenProviderCatalog;
 
 final class BiomePreview implements AutoCloseable {
-    private static final ResourceLocation UNREGISTERED = FTFCommon.location("unregistered");
+    private static final Identifier UNREGISTERED = FTFCommon.location("unregistered");
 
     private final BiomePreviewResolver resolver;
     private final CacheKey cacheKey;
@@ -97,7 +97,7 @@ final class BiomePreview implements AutoCloseable {
 
                 Entry entry = entries.get(biome);
                 if (entry == null) {
-                    ResourceLocation id = biome.unwrapKey().map(ResourceKey::location).orElse(UNREGISTERED);
+                    Identifier id = biome.unwrapKey().map(ResourceKey::identifier).orElse(UNREGISTERED);
                     entry = new Entry(palette.size(), BiomePreviewColors.color(biome, id));
                     entries.put(biome, entry);
                     palette.add(id.toString());
@@ -117,10 +117,10 @@ final class BiomePreview implements AutoCloseable {
                         selection.overrideKind(), selection.rule()
                     );
                     int overrideIndex = overrideEntries.computeIfAbsent(overrideKey, ignored -> {
-                        ResourceLocation sourceId = selection.preReplacementBiome().unwrapKey()
-                            .map(ResourceKey::location).orElse(UNREGISTERED);
-                        ResourceLocation targetId = selection.finalBiome().unwrapKey()
-                            .map(ResourceKey::location).orElse(UNREGISTERED);
+                        Identifier sourceId = selection.preReplacementBiome().unwrapKey()
+                            .map(ResourceKey::identifier).orElse(UNREGISTERED);
+                        Identifier targetId = selection.finalBiome().unwrapKey()
+                            .map(ResourceKey::identifier).orElse(UNREGISTERED);
                         String selector = selection.rule().selectorKind()
                             == BiomeReplacementConfig.SelectorKind.TAG
                                 ? "#" + selection.rule().selector()

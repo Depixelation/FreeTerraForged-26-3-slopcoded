@@ -36,7 +36,7 @@ import dev.worldgen.lithostitched.impl.event.LithostitchedEvent;
 import dev.worldgen.lithostitched.impl.worldgen.biomeinjector.internal.BiomeInjectorManager;
 import dev.worldgen.lithostitched.impl.worldgen.biomeinjector.internal.InjectorBiomeSource;
 import dev.worldgen.lithostitched.impl.worldgen.biomeinjector.region.Region;
-import dev.worldgen.lithostitched.impl.worldgen.densityfunction.FastNoiseDensityFunction;
+import dev.worldgen.lithostitched.impl.worldgen.densityfunction.FastNoiseFunction;
 
 import net.minecraft.core.Holder;
 import net.minecraft.core.HolderLookup;
@@ -49,7 +49,7 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.RegistryOps;
 import net.minecraft.resources.ResourceKey;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.util.InclusiveRange;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.biome.Biome;
@@ -58,8 +58,8 @@ import net.minecraft.world.level.biome.Climate;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.chunk.ChunkGenerator;
 import net.minecraft.world.level.dimension.LevelStem;
-import net.minecraft.world.level.levelgen.DensityFunction;
-import net.minecraft.world.level.levelgen.DensityFunctions;
+import net.minecraft.world.level.levelgen.densityfunction.DensityFunction;
+import net.minecraft.world.level.levelgen.densityfunction.DensityFunctions;
 import net.minecraft.world.level.levelgen.LegacyRandomSource;
 import net.minecraft.world.level.levelgen.NoiseGeneratorSettings;
 import net.minecraft.world.level.levelgen.NoiseBasedChunkGenerator;
@@ -73,19 +73,20 @@ import etcodehome.freeterraforged.FTFCommon;
 import etcodehome.freeterraforged.platform.ModLoaderUtil;
 import etcodehome.freeterraforged.mixin.BiomeSourceAccessor;
 import etcodehome.freeterraforged.mixin.LithostitchedBridgeContract;
+import etcodehome.freeterraforged.world.worldgen.densityfunction.MarkerFunction;
 import etcodehome.freeterraforged.world.worldgen.runtime.BiomeCandidateRoot;
 import etcodehome.freeterraforged.world.worldgen.runtime.MinecraftBiomeSourceGraphs;
 import etcodehome.freeterraforged.world.worldgen.runtime.PreServerWorldgenContext;
 
 public final class LithostitchedInjectionBridge {
 	private static final AtomicLong REVISION = new AtomicLong();
-	private static final ResourceLocation NO_REGION = FTFCommon.location("no_region");
-	private static final ResourceLocation ADD_POINTS = lithostitched("add_points");
-	private static final ResourceLocation DISPATCH_ALTERNATE_LAYOUT = lithostitched("dispatch_alternate_layout");
-	private static final ResourceLocation FORCE_PLACEMENT = lithostitched("force_placement");
-	private static final ResourceLocation REPLACE_FULLY = lithostitched("replace_fully");
-	private static final ResourceLocation REPLACE_PARTIALLY = lithostitched("replace_partially");
-	private static final ResourceLocation END_ISLANDS = ResourceLocation.withDefaultNamespace("end_islands");
+	private static final Identifier NO_REGION = FTFCommon.location("no_region");
+	private static final Identifier ADD_POINTS = lithostitched("add_points");
+	private static final Identifier DISPATCH_ALTERNATE_LAYOUT = lithostitched("dispatch_alternate_layout");
+	private static final Identifier FORCE_PLACEMENT = lithostitched("force_placement");
+	private static final Identifier REPLACE_FULLY = lithostitched("replace_fully");
+	private static final Identifier REPLACE_PARTIALLY = lithostitched("replace_partially");
+	private static final Identifier END_ISLANDS = Identifier.withDefaultNamespace("end_islands");
 	private static final Codec<ClimateAxis> CLIMATE_AXIS_CODEC = Codec.STRING.comapFlatMap(
 		ClimateAxis::decode, ClimateAxis::serializedName
 	);
@@ -111,17 +112,17 @@ public final class LithostitchedInjectionBridge {
 	private LithostitchedInjectionBridge() {
 	}
 
-	private static ResourceLocation lithostitched(String path) {
-		return ResourceLocation.fromNamespaceAndPath("lithostitched", path);
+	private static Identifier lithostitched(String path) {
+		return Identifier.fromNamespaceAndPath("lithostitched", path);
 	}
 
-	static Optional<ResourceLocation> densityFunctionType(DensityFunction function) {
+	static Optional<Identifier> densityFunctionType(DensityFunction function) {
 		Objects.requireNonNull(function, "function");
 		if (function instanceof DensityFunctions.HolderHolder) {
 			return Optional.empty();
 		}
 		return Optional.ofNullable(BuiltInRegistries.DENSITY_FUNCTION_TYPE.getKey(
-			function.codec().codec()
+			function.codec()
 		));
 	}
 
@@ -150,7 +151,7 @@ public final class LithostitchedInjectionBridge {
 				PRE_SERVER_COLLECTOR.set(collector);
 				try {
 					BiomeInjectorManager.applyBiomeInjectors(
-						context.registries(), isolatedDimensions, context.seed()
+						null, context.registries(), isolatedDimensions, context.seed()
 					);
 				} finally {
 					PRE_SERVER_COLLECTOR.remove();
@@ -159,7 +160,7 @@ public final class LithostitchedInjectionBridge {
 				for (Map.Entry<ResourceKey<LevelStem>, LevelStem> entry
 					: context.dimensions().dimensions().entrySet()) {
 					ChunkGenerator originalGenerator = entry.getValue().generator();
-					LevelStem clonedStem = isolatedDimensions.getOrThrow(entry.getKey());
+					LevelStem clonedStem = isolatedDimensions.getValueOrThrow(entry.getKey());
 					BiomeSource clonedSource = MinecraftBiomeSourceGraphs.acquisitionSource(clonedStem.generator());
 					snapshot(clonedSource).ifPresent(value -> {
 						BiomeSource originalSource = originalSources.get(originalGenerator);
@@ -327,10 +328,22 @@ public final class LithostitchedInjectionBridge {
 
 	public static void applyAndCapture(
 		InjectorBiomeSource source,
-		Map<ResourceLocation, BiomeInjector> injectors,
+		Map<Identifier, BiomeInjector> injectors,
 		Optional<DensityFunction> regionFunction,
 		Map<ResourceKey<Region>, Region> regions,
 		DensityFunctionWrapper noiseHelper,
+		RegistryAccess registries,
+		long seed
+	) {
+		applyAndCapture(source, injectors, regionFunction, regions, (RandomState) null, registries, seed);
+	}
+
+	public static void applyAndCapture(
+		InjectorBiomeSource source,
+		Map<Identifier, BiomeInjector> injectors,
+		Optional<DensityFunction> regionFunction,
+		Map<ResourceKey<Region>, Region> regions,
+		RandomState noiseHelper,
 		RegistryAccess registries,
 		long seed
 	) {
@@ -348,19 +361,19 @@ public final class LithostitchedInjectionBridge {
 		List<ClonedInjector> clones = new ArrayList<>();
 		List<String> failures = new ArrayList<>();
 		int encounter = 0;
-		for (Map.Entry<ResourceLocation, BiomeInjector> entry : injectors.entrySet()) {
+		for (Map.Entry<Identifier, BiomeInjector> entry : injectors.entrySet()) {
 			try {
 				JsonElement encoded = BiomeInjector.CODEC.encodeStart(ops, entry.getValue())
 					.getOrThrow(message -> new IllegalStateException("encode: " + message));
 				BiomeInjector clone = BiomeInjector.CODEC.parse(ops, encoded)
 					.getOrThrow(message -> new IllegalStateException("decode: " + message));
-				ResourceLocation codec = LithostitchedBuiltInRegistries.BIOME_INJECTOR_TYPE
+				Identifier codec = LithostitchedBuiltInRegistries.BIOME_INJECTOR_TYPE
 					.getKey(clone.codec());
 				if (codec == null) {
 					throw new IllegalStateException("unregistered injector codec");
 				}
-				Optional<ResourceLocation> loadPredicateCodec = clone.predicate().map(predicate -> {
-					ResourceLocation id = LithostitchedBuiltInRegistries.LOAD_PREDICATE_TYPE
+				Optional<Identifier> loadPredicateCodec = clone.predicate().map(predicate -> {
+					Identifier id = LithostitchedBuiltInRegistries.LOAD_PREDICATE_TYPE
 						.getKey(predicate.codec());
 					if (id == null) {
 						throw new IllegalStateException("unregistered load-predicate codec");
@@ -377,21 +390,22 @@ public final class LithostitchedInjectionBridge {
 			}
 		}
 
+		MarkerFunction.Visitor densityBinder = new DensityBinder(seed);
 		if (PRE_SERVER_COLLECTOR.get() == null) {
 			source.applyInjectors(injectors, regionFunction, regions, noiseHelper);
 		}
 		List<CapturedInjector> captured = new ArrayList<>();
 		for (ClonedInjector clone : clones) {
 			try {
-				captured.add(normalize(clone, ops, noiseHelper));
+				captured.add(normalize(clone, ops, densityBinder));
 			} catch (RuntimeException | LinkageError failure) {
 				failures.add(clone.id() + ": " + failure.getMessage());
 			}
 		}
 		List<CapturedRegion> capturedRegions = regions.entrySet().stream()
-			.sorted(Map.Entry.comparingByKey(Comparator.comparing(key -> key.location().toString())))
+			.sorted(Map.Entry.comparingByKey(Comparator.comparing(key -> key.identifier().toString())))
 			.map(entry -> new CapturedRegion(
-				entry.getKey().location(), entry.getValue().dimension(),
+				entry.getKey().identifier(), entry.getValue().dimension(),
 				List.copyOf(entry.getValue().biomes().stream().toList()), entry.getValue().weight()
 			))
 			.toList();
@@ -437,32 +451,32 @@ public final class LithostitchedInjectionBridge {
 			.stream()
 			.flatMap(HolderLookup.RegistryLookup::listElements)
 			.filter(holder -> holder.value().dimension().equals(dimension))
-			.sorted(Comparator.comparing(holder -> holder.key().location().toString()))
+			.sorted(Comparator.comparing(holder -> holder.key().identifier().toString()))
 			.toList();
 		if (declarations.isEmpty()) {
 			return Optional.empty();
 		}
 
-		Map<ResourceLocation, BiomeInjector> injectors = new LinkedHashMap<>();
+		Map<Identifier, BiomeInjector> injectors = new LinkedHashMap<>();
 		List<String> failures = new ArrayList<>();
 		for (Holder.Reference<BiomeInjector> declaration : declarations) {
 			try {
 				BiomeInjector injector = declaration.value();
 				if (injector.predicate().map(predicate -> predicate.test()).orElse(true)) {
-					injectors.put(declaration.key().location(), injector);
+					injectors.put(declaration.key().identifier(), injector);
 				}
 			} catch (RuntimeException | LinkageError failure) {
-				failures.add(declaration.key().location() + " load predicate: "
+				failures.add(declaration.key().identifier() + " load predicate: "
 					+ failure.getClass().getName() + ": "
 					+ Optional.ofNullable(failure.getMessage()).orElse("<no message>"));
 			}
 		}
 
 		RegistryOps<JsonElement> ops = RegistryOps.create(JsonOps.INSTANCE, lookups);
-		DensityFunction.Visitor densityBinder = new LazyDensityBinder(seed, settings, lookups);
+		MarkerFunction.Visitor densityBinder = new LazyDensityBinder(seed, settings, lookups);
 		List<CapturedInjector> captured = new ArrayList<>();
 		int encounter = 0;
-		for (Map.Entry<ResourceLocation, BiomeInjector> entry : injectors.entrySet()) {
+		for (Map.Entry<Identifier, BiomeInjector> entry : injectors.entrySet()) {
 			try {
 				ClonedInjector clone = clone(entry.getKey(), encounter++, entry.getValue(), ops);
 				captured.add(normalize(clone, ops, densityBinder));
@@ -475,15 +489,15 @@ public final class LithostitchedInjectionBridge {
 			.stream()
 			.flatMap(HolderLookup.RegistryLookup::listElements)
 			.filter(holder -> holder.value().dimension().equals(dimension))
-			.sorted(Comparator.comparing(holder -> holder.key().location().toString()))
+			.sorted(Comparator.comparing(holder -> holder.key().identifier().toString()))
 			.map(holder -> new CapturedRegion(
-				holder.key().location(), holder.value().dimension(),
+				holder.key().identifier(), holder.value().dimension(),
 				List.copyOf(holder.value().biomes().stream().toList()), holder.value().weight()
 			))
 			.toList();
 		ResourceKey<DensityFunction> regionKey = ResourceKey.create(
 			Registries.DENSITY_FUNCTION,
-			dev.worldgen.lithostitched.Lithostitched.vanillaToLithostitched(dimension.location())
+			dev.worldgen.lithostitched.impl.Lithostitched.vanillaToLithostitched(dimension.identifier())
 				.withPrefix("region/")
 		);
 		boolean regionFunctionPresent = lookups.lookup(Registries.DENSITY_FUNCTION)
@@ -519,8 +533,8 @@ public final class LithostitchedInjectionBridge {
 		boolean bindsDensity = snapshot.injectors().stream()
 			.flatMap(injector -> injector.criteria().stream())
 			.anyMatch(criteria -> !criteria.density().isEmpty());
-		DensityFunction.Visitor densityBinder = bindsDensity
-			? new DensityBinder(seed, settings, lookups)
+		MarkerFunction.Visitor densityBinder = bindsDensity
+			? new DensityBinder(seed)
 			: null;
 		Optional<BiomeCandidateRoot> baseRoot = rebindRoot(snapshot.baseRoot(), biomes);
 		List<CapturedInjector> injectors = snapshot.injectors().stream()
@@ -606,7 +620,7 @@ public final class LithostitchedInjectionBridge {
 	private static CapturedInjector normalize(
 		ClonedInjector value,
 		RegistryOps<JsonElement> ops,
-		DensityFunction.Visitor densityBinder
+		MarkerFunction.Visitor densityBinder
 	) {
 		Kind kind = kindForCodec(value.codec());
 		if (kind == Kind.ADD_POINTS) {
@@ -640,7 +654,7 @@ public final class LithostitchedInjectionBridge {
 		return captured(value, Kind.UNKNOWN, List.of(), Optional.empty(), List.of(), Optional.empty());
 	}
 
-	static Kind kindForCodec(ResourceLocation codec) {
+	static Kind kindForCodec(Identifier codec) {
 		if (ADD_POINTS.equals(codec)) {
 			return Kind.ADD_POINTS;
 		}
@@ -671,7 +685,7 @@ public final class LithostitchedInjectionBridge {
 	}
 
 	private static ClonedInjector clone(
-		ResourceLocation id,
+		Identifier id,
 		int encounter,
 		BiomeInjector injector,
 		RegistryOps<JsonElement> ops
@@ -680,12 +694,12 @@ public final class LithostitchedInjectionBridge {
 			.getOrThrow(message -> new IllegalStateException("encode: " + message));
 		BiomeInjector clone = BiomeInjector.CODEC.parse(ops, encoded)
 			.getOrThrow(message -> new IllegalStateException("decode: " + message));
-		ResourceLocation codec = LithostitchedBuiltInRegistries.BIOME_INJECTOR_TYPE.getKey(clone.codec());
+		Identifier codec = LithostitchedBuiltInRegistries.BIOME_INJECTOR_TYPE.getKey(clone.codec());
 		if (codec == null) {
 			throw new IllegalStateException("unregistered injector codec");
 		}
-		Optional<ResourceLocation> loadPredicateCodec = clone.predicate().map(predicate -> {
-			ResourceLocation predicateCodec = LithostitchedBuiltInRegistries.LOAD_PREDICATE_TYPE
+		Optional<Identifier> loadPredicateCodec = clone.predicate().map(predicate -> {
+			Identifier predicateCodec = LithostitchedBuiltInRegistries.LOAD_PREDICATE_TYPE
 				.getKey(predicate.codec());
 			if (predicateCodec == null) {
 				throw new IllegalStateException("unregistered load-predicate codec");
@@ -729,14 +743,14 @@ public final class LithostitchedInjectionBridge {
 
 	private record CriteriaWire(
 		Map<Either<ClimateAxis, DensityFunction>, InclusiveRange<Double>> parameters,
-		Optional<ResourceLocation> region
+		Optional<Identifier> region
 	) {
 		private static final MapCodec<CriteriaWire> MAP_CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
 			Codec.unboundedMap(
-				Codec.either(CLIMATE_AXIS_CODEC, DensityFunction.HOLDER_HELPER_CODEC),
+				Codec.either(CLIMATE_AXIS_CODEC, DensityFunction.CODEC),
 				DOUBLE_RANGE_CODEC
 			).fieldOf("parameters").forGetter(CriteriaWire::parameters),
-			ResourceLocation.CODEC.optionalFieldOf("region").forGetter(CriteriaWire::region)
+			Identifier.CODEC.optionalFieldOf("region").forGetter(CriteriaWire::region)
 		).apply(instance, CriteriaWire::new));
 	}
 
@@ -785,11 +799,11 @@ public final class LithostitchedInjectionBridge {
 	}
 
 	private record ClonedInjector(
-		ResourceLocation id,
-		ResourceLocation codec,
+		Identifier id,
+		Identifier codec,
 		int encounter,
 		ResourceKey<LevelStem> dimension,
-		Optional<ResourceLocation> loadPredicateCodec,
+		Optional<Identifier> loadPredicateCodec,
 		Optional<Boolean> loadPredicateResult,
 		JsonElement encoded,
 		BiomeInjector injector
@@ -799,10 +813,8 @@ public final class LithostitchedInjectionBridge {
 		}
 	}
 
-	private static final class LazyDensityBinder implements DensityFunction.Visitor {
+	private static final class LazyDensityBinder implements MarkerFunction.Visitor {
 		private final long seed;
-		private final NoiseGeneratorSettings settings;
-		private final HolderLookup.Provider lookups;
 		private volatile DensityBinder delegate;
 
 		private LazyDensityBinder(
@@ -811,13 +823,6 @@ public final class LithostitchedInjectionBridge {
 			HolderLookup.Provider lookups
 		) {
 			this.seed = seed;
-			this.settings = settings;
-			this.lookups = lookups;
-		}
-
-		@Override
-		public DensityFunction.NoiseHolder visitNoise(DensityFunction.NoiseHolder holder) {
-			return this.delegate().visitNoise(holder);
 		}
 
 		@Override
@@ -833,7 +838,7 @@ public final class LithostitchedInjectionBridge {
 			synchronized (this) {
 				current = this.delegate;
 				if (current == null) {
-					current = new DensityBinder(this.seed, this.settings, this.lookups);
+					current = new DensityBinder(this.seed);
 					this.delegate = current;
 				}
 			}
@@ -841,54 +846,12 @@ public final class LithostitchedInjectionBridge {
 		}
 	}
 
-	private static final class DensityBinder implements DensityFunction.Visitor {
+	private static final class DensityBinder implements MarkerFunction.Visitor {
 		private final Map<DensityFunction, DensityFunction> bound = new ConcurrentHashMap<>();
 		private final long seed;
-		private final boolean legacy;
-		private final RandomState randomState;
-		private final PositionalRandomFactory random;
 
-		private DensityBinder(long seed, NoiseGeneratorSettings settings, HolderLookup.Provider lookups) {
+		private DensityBinder(long seed) {
 			this.seed = seed;
-			this.legacy = settings.useLegacyRandomSource();
-			this.randomState = RandomState.create(
-				settings, lookups.lookupOrThrow(Registries.NOISE), seed
-			);
-			this.random = settings.getRandomSource().newInstance(seed).forkPositional();
-		}
-
-		@Override
-		public DensityFunction.NoiseHolder visitNoise(DensityFunction.NoiseHolder holder) {
-			Holder<NormalNoise.NoiseParameters> parameters = holder.noiseData();
-			if (this.legacy && parameters.is(Noises.TEMPERATURE)) {
-				return new DensityFunction.NoiseHolder(
-					parameters,
-					NormalNoise.createLegacyNetherBiome(
-						this.legacyRandom(0L), new NormalNoise.NoiseParameters(-7, 1.0D, 1.0D)
-					)
-				);
-			}
-			if (this.legacy && parameters.is(Noises.VEGETATION)) {
-				return new DensityFunction.NoiseHolder(
-					parameters,
-					NormalNoise.createLegacyNetherBiome(
-						this.legacyRandom(1L), new NormalNoise.NoiseParameters(-7, 1.0D, 1.0D)
-					)
-				);
-			}
-			if (this.legacy && parameters.is(Noises.SHIFT)) {
-				return new DensityFunction.NoiseHolder(
-					parameters,
-					NormalNoise.create(
-						this.random.fromHashOf(Noises.SHIFT.location()),
-						new NormalNoise.NoiseParameters(0, 0.0D)
-					)
-				);
-			}
-			return new DensityFunction.NoiseHolder(
-				parameters,
-				this.randomState.getOrCreateNoise(parameters.unwrapKey().orElseThrow())
-			);
 		}
 
 		@Override
@@ -897,31 +860,21 @@ public final class LithostitchedInjectionBridge {
 		}
 
 		private DensityFunction bind(DensityFunction function) {
-			if (function instanceof FastNoiseDensityFunction fastNoise) {
+			if (function instanceof FastNoiseFunction fastNoise) {
 				JsonElement encoded = FastNoiseConfig.CODEC.encodeStart(JsonOps.INSTANCE, fastNoise.config().value())
 					.getOrThrow(message -> new IllegalStateException("fast-noise encode: " + message));
 				FastNoiseConfig config = FastNoiseConfig.CODEC.parse(JsonOps.INSTANCE, encoded)
 					.getOrThrow(message -> new IllegalStateException("fast-noise decode: " + message));
 				config.bind(this.seed);
-				return new FastNoiseDensityFunction(
+				return new FastNoiseFunction(
 					Holder.direct(config), fastNoise.xzScale(), fastNoise.yScale(),
 					fastNoise.shiftX(), fastNoise.shiftY(), fastNoise.shiftZ()
 				);
 			}
-			if (function instanceof BlendedNoise blended) {
-				RandomSource source = this.legacy
-					? this.legacyRandom(0L)
-					: this.random.fromHashOf(ResourceLocation.withDefaultNamespace("terrain"));
-				return blended.withNewRandom(source);
-			}
 			if (densityFunctionType(function).filter(END_ISLANDS::equals).isPresent()) {
-				return DensityFunctions.endIslands(this.seed);
+				return DensityFunctions.endOuterIslands();
 			}
 			return function;
-		}
-
-		private RandomSource legacyRandom(long noiseSeed) {
-			return new LegacyRandomSource(this.seed + noiseSeed);
 		}
 	}
 
@@ -938,7 +891,7 @@ public final class LithostitchedInjectionBridge {
 			this.ops = RegistryOps.create(JsonOps.INSTANCE, registries);
 		}
 
-		private BiomeEmission encode(ResourceLocation id, BiomeInjector injector) {
+		private BiomeEmission encode(Identifier id, BiomeInjector injector) {
 			JsonElement encoded = BiomeInjector.CODEC.encodeStart(this.ops, injector)
 				.getOrThrow(message -> new IllegalStateException(
 					"Failed freezing pre-server Lithostitched injector " + id + ": " + message
@@ -956,7 +909,7 @@ public final class LithostitchedInjectionBridge {
 				key, level,
 				biomes.stream().map(holder -> holder.unwrapKey().orElseThrow(
 					() -> new IllegalStateException(
-						"Pre-server Lithostitched region " + key.location() + " contains a direct biome holder"
+						"Pre-server Lithostitched region " + key.identifier() + " contains a direct biome holder"
 					)
 				)).toList(),
 				weight
@@ -1002,7 +955,7 @@ public final class LithostitchedInjectionBridge {
 		}
 	}
 
-	private record BiomeEmission(ResourceLocation id, JsonElement encoded) {
+	private record BiomeEmission(Identifier id, JsonElement encoded) {
 		private BiomeEmission {
 			id = Objects.requireNonNull(id, "id");
 			encoded = Objects.requireNonNull(encoded, "encoded").deepCopy();
@@ -1030,10 +983,10 @@ public final class LithostitchedInjectionBridge {
 		}
 
 		private void replay(RegistryAccess registries, AddRegionsEvent.RegionConsumer consumer) {
-			Registry<Biome> biomeRegistry = registries.registryOrThrow(Registries.BIOME);
+			Registry<Biome> biomeRegistry = registries.lookupOrThrow(Registries.BIOME);
 			consumer.accept(
 				this.key, this.level,
-				HolderSet.direct(this.biomes.stream().map(biomeRegistry::getHolderOrThrow).toList()),
+				HolderSet.direct(this.biomes.stream().map(biomeRegistry::getOrThrow).toList()),
 				this.weight
 			);
 		}
@@ -1145,15 +1098,15 @@ public final class LithostitchedInjectionBridge {
 			range = Objects.requireNonNull(range, "range");
 		}
 
-		private DensityCriterion bind(DensityFunction.Visitor visitor) {
-			return new DensityCriterion(this.declaration, this.declaration.mapAll(visitor), this.range);
+		private DensityCriterion bind(MarkerFunction.Visitor visitor) {
+			return new DensityCriterion(this.declaration, MarkerFunction.mapAll(this.declaration, visitor), this.range);
 		}
 	}
 
 	public record ParameterCriteria(
 		List<ClimateCriterion> climate,
 		List<DensityCriterion> density,
-		Optional<ResourceLocation> region
+		Optional<Identifier> region
 	) {
 		public ParameterCriteria {
 			climate = List.copyOf(climate);
@@ -1161,7 +1114,7 @@ public final class LithostitchedInjectionBridge {
 			region = Objects.requireNonNull(region, "region");
 		}
 
-		private ParameterCriteria bind(DensityFunction.Visitor visitor) {
+		private ParameterCriteria bind(MarkerFunction.Visitor visitor) {
 			if (this.density.isEmpty()) {
 				return this;
 			}
@@ -1178,7 +1131,7 @@ public final class LithostitchedInjectionBridge {
 			int blockY,
 			int blockZ,
 			Climate.TargetPoint target,
-			ResourceLocation currentRegion
+			Identifier currentRegion
 		) {
 			if (this.region.filter(value -> !value.equals(currentRegion)).isPresent()) {
 				return false;
@@ -1191,15 +1144,15 @@ public final class LithostitchedInjectionBridge {
 			if (this.density.isEmpty()) {
 				return true;
 			}
-			DensityFunction.FunctionContext context = new DensityFunction.SinglePointContext(blockX, blockY, blockZ);
+			MarkerFunction.FunctionContext context = new MarkerFunction.SinglePointContext(blockX, blockY, blockZ);
 			if (this.density.size() == 1) {
 				DensityCriterion criterion = this.density.getFirst();
-				return criterion.range().contains(criterion.executable().compute(context));
+				return criterion.range().contains(MarkerFunction.compute(criterion.executable(), context));
 			}
 			Map<DensityFunction, Double> values = new HashMap<>();
 			for (DensityCriterion criterion : this.density) {
 				double value = values.computeIfAbsent(
-					criterion.executable(), function -> function.compute(context)
+					criterion.executable(), function -> MarkerFunction.compute(function, context)
 				);
 				if (!criterion.range().contains(value)) {
 					return false;
@@ -1210,13 +1163,13 @@ public final class LithostitchedInjectionBridge {
 	}
 
 	public record CapturedInjector(
-		ResourceLocation id,
-		ResourceLocation codec,
+		Identifier id,
+		Identifier codec,
 		int encounterOrder,
 		int priority,
 		Kind kind,
 		ResourceKey<LevelStem> dimension,
-		Optional<ResourceLocation> loadPredicateCodec,
+		Optional<Identifier> loadPredicateCodec,
 		Optional<Boolean> loadPredicateResult,
 		List<Holder<Biome>> targets,
 		Optional<Holder<Biome>> output,
@@ -1238,7 +1191,7 @@ public final class LithostitchedInjectionBridge {
 	}
 
 	public record CapturedRegion(
-		ResourceLocation id,
+		Identifier id,
 		ResourceKey<LevelStem> dimension,
 		List<Holder<Biome>> biomes,
 		int weight
@@ -1272,7 +1225,7 @@ public final class LithostitchedInjectionBridge {
 		}
 	}
 
-	public static ResourceLocation noRegion() {
+	public static Identifier noRegion() {
 		return NO_REGION;
 	}
 }

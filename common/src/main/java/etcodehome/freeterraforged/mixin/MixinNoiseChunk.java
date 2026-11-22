@@ -1,111 +1,72 @@
 package etcodehome.freeterraforged.mixin;
 
 import java.util.List;
-
 import org.jetbrains.annotations.Nullable;
+import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyArg;
-import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import net.minecraft.core.SectionPos;
 import net.minecraft.util.Mth;
-import net.minecraft.world.level.biome.Climate;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.levelgen.Aquifer;
-import net.minecraft.world.level.levelgen.blending.Blender;
-import net.minecraft.world.level.levelgen.DensityFunction;
-import net.minecraft.world.level.levelgen.DensityFunctions;
+import net.minecraft.world.level.levelgen.Beardifier;
 import net.minecraft.world.level.levelgen.NoiseChunk;
 import net.minecraft.world.level.levelgen.NoiseGeneratorSettings;
-import net.minecraft.world.level.levelgen.NoiseRouter;
-import net.minecraft.world.level.levelgen.NoiseSettings;
 import net.minecraft.world.level.levelgen.RandomState;
+import net.minecraft.world.level.levelgen.blending.Blender;
+import net.minecraft.world.level.levelgen.densityfunction.DensityVolume;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.Preset;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.WorldSettings;
 import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
 import etcodehome.freeterraforged.world.worldgen.FTFRandomState;
 import etcodehome.freeterraforged.world.worldgen.IChunkCellsHolder;
-import etcodehome.freeterraforged.world.worldgen.biome.FTFClimateSampler;
 import etcodehome.freeterraforged.world.worldgen.cell.Cell;
-import etcodehome.freeterraforged.world.worldgen.cell.filter.ChunkFilterGrid;
 import etcodehome.freeterraforged.world.worldgen.densityfunction.CellSampler;
 import etcodehome.freeterraforged.world.worldgen.perf.WorldgenPerfTracker;
-import etcodehome.freeterraforged.world.worldgen.runtime.WorldgenPlan;
-import etcodehome.freeterraforged.world.worldgen.runtime.WorldgenPlans;
 
 @Mixin(NoiseChunk.class)
-class MixinNoiseChunk implements IChunkCellsHolder {
-	@Unique
-	private static final ThreadLocal<ChunkAccess> freeterraforged$ACTIVE_CHUNK = new ThreadLocal<>();
+public class MixinNoiseChunk implements IChunkCellsHolder {
 
+	@Shadow
+	@Final
 	private RandomState randomState;
+
+	@Unique
 	private int chunkX, chunkZ;
+	@Unique
 	@Nullable
 	private Aquifer.FluidPicker freeterraforged$fluidPicker;
+	@Unique
 	@Nullable
 	private Cell[] freeterraforged$chunkCells;
-
-	@Inject(
-		method = "forChunk",
-		at = @At("HEAD")
-	)
-	private static void freeterraforged$onForChunkHead(
-		ChunkAccess chunk,
-		RandomState randomState,
-		DensityFunctions.BeardifierOrMarker beardifierOrMarker,
-		NoiseGeneratorSettings noiseGeneratorSettings,
-		Aquifer.FluidPicker fluidPicker,
-		Blender blender,
-		CallbackInfoReturnable<NoiseChunk> cir
-	) {
-		freeterraforged$ACTIVE_CHUNK.set(chunk);
-	}
-
-	@Inject(
-		method = "forChunk",
-		at = @At("RETURN")
-	)
-	private static void freeterraforged$onForChunkReturn(
-		ChunkAccess chunk,
-		RandomState randomState,
-		DensityFunctions.BeardifierOrMarker beardifierOrMarker,
-		NoiseGeneratorSettings noiseGeneratorSettings,
-		Aquifer.FluidPicker fluidPicker,
-		Blender blender,
-		CallbackInfoReturnable<NoiseChunk> cir
-	) {
-		freeterraforged$ACTIVE_CHUNK.remove();
-	}
 
 	@Inject(
 		method = "<init>",
 		at = @At(
 			value = "INVOKE",
-			target = "Lnet/minecraft/world/level/levelgen/NoiseRouter;mapAll(Lnet/minecraft/world/level/levelgen/DensityFunction$Visitor;)Lnet/minecraft/world/level/levelgen/NoiseRouter;",
-			shift = At.Shift.BEFORE
+			target = "Ljava/lang/Object;<init>()V",
+			shift = At.Shift.AFTER
 		)
 	)
-	private void freeterraforged$initializeNoiseChunkOwner(
-		int cellCountXZ,
+	private void freeterraforged$initializeNoiseChunk(
 		RandomState randomState,
-		int minBlockX,
-		int minBlockZ,
-		NoiseSettings noiseSettings,
-		DensityFunctions.BeardifierOrMarker beardifierOrMarker,
+		Beardifier beardifier,
 		NoiseGeneratorSettings generatorSettings,
 		Aquifer.FluidPicker fluidPicker,
 		Blender blender,
+		DensityVolume volume,
 		CallbackInfo callback
 	) {
-		this.randomState = randomState;
-		this.chunkX = SectionPos.blockToSectionCoord(minBlockX);
-		this.chunkZ = SectionPos.blockToSectionCoord(minBlockZ);
+		this.chunkX = SectionPos.blockToSectionCoord(volume.minBlockX());
+		this.chunkZ = SectionPos.blockToSectionCoord(volume.minBlockZ());
 		if ((Object) randomState instanceof FTFRandomState rtfRandomState) {
 			Preset preset = rtfRandomState.preset();
 			GeneratorContext generatorContext = rtfRandomState.generatorContext();
@@ -113,17 +74,13 @@ class MixinNoiseChunk implements IChunkCellsHolder {
 				this.freeterraforged$fluidPicker = this.freeterraforged$createFluidPicker(
 					preset, generatorContext, generatorSettings
 				);
-				if (cellCountXZ > 1) {
-					ChunkAccess activeChunk = freeterraforged$ACTIVE_CHUNK.get();
-					if (activeChunk instanceof IChunkCellsHolder holder
-							&& activeChunk.getPos().x == this.chunkX
-							&& activeChunk.getPos().z == this.chunkZ) {
-						this.freeterraforged$chunkCells = holder.freeterraforged$getOrCreateChunkCells(generatorContext);
-					} else {
-						this.freeterraforged$chunkCells = generatorContext.filteredChunkCache.getFilteredChunk(this.chunkX, this.chunkZ);
-					}
+				ChunkAccess activeChunk = IChunkCellsHolder.ACTIVE_CHUNK.get();
+				if (activeChunk instanceof IChunkCellsHolder holder
+						&& activeChunk.getPos().x() == this.chunkX
+						&& activeChunk.getPos().z() == this.chunkZ) {
+					this.freeterraforged$chunkCells = holder.freeterraforged$getOrCreateChunkCells(generatorContext);
 				} else {
-					this.freeterraforged$chunkCells = generatorContext.filteredChunkCache.getIfPresent(this.chunkX, this.chunkZ);
+					this.freeterraforged$chunkCells = generatorContext.filteredChunkCache.getFilteredChunk(this.chunkX, this.chunkZ);
 				}
 			}
 		}
@@ -145,9 +102,9 @@ class MixinNoiseChunk implements IChunkCellsHolder {
 		method = "<init>",
 		at = @At(
 			value = "INVOKE",
-			target = "Lnet/minecraft/world/level/levelgen/Aquifer;create(Lnet/minecraft/world/level/levelgen/NoiseChunk;Lnet/minecraft/world/level/ChunkPos;Lnet/minecraft/world/level/levelgen/NoiseRouter;Lnet/minecraft/world/level/levelgen/PositionalRandomFactory;IILnet/minecraft/world/level/levelgen/Aquifer$FluidPicker;)Lnet/minecraft/world/level/levelgen/Aquifer;"
+			target = "Lnet/minecraft/world/level/levelgen/Aquifer$Config;create(Lnet/minecraft/world/level/levelgen/densityfunction/DensitySamplerSet;Lnet/minecraft/world/level/levelgen/PositionalRandomFactory;Lnet/minecraft/world/level/levelgen/densityfunction/DensityVolume;Lnet/minecraft/world/level/levelgen/Aquifer$FluidPicker;)Lnet/minecraft/world/level/levelgen/Aquifer;"
 		),
-		index = 6
+		index = 3
 	)
 	private Aquifer.FluidPicker freeterraforged$modifyFluidPicker(Aquifer.FluidPicker fluidPicker) {
 		return this.freeterraforged$fluidPicker == null ? fluidPicker : this.freeterraforged$fluidPicker;
@@ -176,7 +133,6 @@ class MixinNoiseChunk implements IChunkCellsHolder {
 		Aquifer.FluidStatus oceanLava = new Aquifer.FluidStatus(oceanLavaLevel, Blocks.LAVA.defaultBlockState());
 		int[] columnCache = { Integer.MIN_VALUE, Integer.MIN_VALUE, globalLavaLevel };
 		Aquifer.FluidStatus[] cachedLavaStatus = { lava };
-		Cell scratchCell = new Cell();
 
 		return (x, y, z) -> {
 			int effectiveLava;
@@ -219,42 +175,6 @@ class MixinNoiseChunk implements IChunkCellsHolder {
 
 			return y < Math.min(effectiveLava, seaLevel) ? effectiveLavaStatus : defaultFluid;
 		};
-	}
-
-	@Inject(
-		at = @At("RETURN"),
-		method = "cachedClimateSampler"
-	)
-	private void freeterraforged$bindWorldgenPlan(
-		NoiseRouter noiseRouter,
-		List<Climate.ParameterPoint> spawnTarget,
-		CallbackInfoReturnable<Climate.Sampler> callback
-	) {
-		if ((Object) this.randomState instanceof FTFRandomState randomState
-			&& randomState.preset() != null
-			&& randomState.generatorContext() != null
-			&& randomState.plan() != null
-			&& randomState.binding() != null
-			&& (Object) callback.getReturnValue() instanceof FTFClimateSampler sampler) {
-			WorldgenPlan plan = randomState.plan();
-			plan.samplerDecoration().initialize(
-				plan,
-				new WorldgenPlans.SamplerInputs(randomState.preset(), randomState.generatorContext()),
-				callback.getReturnValue()
-			);
-			sampler.setWorldgenBinding(randomState.binding());
-		}
-	}
-
-	@Inject(
-		at = @At("HEAD"),
-		method = "wrapNew",
-		cancellable = true
-	)
-	private void wrapNew(DensityFunction function, CallbackInfoReturnable<DensityFunction> callback) {
-		if((Object) this.randomState instanceof FTFRandomState randomState && function instanceof CellSampler mapped) {
-			callback.setReturnValue(mapped.new CacheChunk(this.freeterraforged$chunkCells, this.chunkX << 4, this.chunkZ << 4, null));
-		}
 	}
 
 	@Override

@@ -9,6 +9,8 @@ import etcodehome.freeterraforged.server.FTFMinecraftServer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.levelgen.feature.Feature;
+import net.minecraft.world.level.levelgen.feature.OreFeature;
+import net.minecraft.world.level.levelgen.feature.ScatteredOreFeature;
 import net.minecraft.world.level.levelgen.placement.HeightRangePlacement;
 import net.minecraft.world.level.levelgen.placement.PlacementModifier;
 import net.minecraft.world.level.levelgen.placement.PlacedFeature;
@@ -113,8 +115,8 @@ public final class DynamicOrePlacement {
 	}
 
 	private static boolean isStandardOre(PlacedFeature feature) {
-		Feature<?> configuredType = feature.feature().value().feature();
-		return configuredType == Feature.ORE || configuredType == Feature.SCATTERED_ORE;
+		Feature configuredType = feature.feature().value();
+		return configuredType instanceof OreFeature || configuredType instanceof ScatteredOreFeature;
 	}
 
 	private static Optional<Activation> activation(PlacementModifier modifier, PlacementContext context) {

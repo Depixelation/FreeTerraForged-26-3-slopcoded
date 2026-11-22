@@ -13,11 +13,14 @@ import com.mojang.serialization.JsonOps;
 import net.minecraft.core.Holder;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.resources.RegistryOps;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.util.valueproviders.IntProvider;
-import net.minecraft.world.level.levelgen.feature.ConfiguredFeature;
+import net.minecraft.util.valueproviders.IntProviders;
+import net.minecraft.world.level.levelgen.feature.Feature;
+import net.minecraft.world.level.levelgen.feature.OverlayFeature;
+import net.minecraft.world.level.levelgen.feature.RandomSelectorFeature;
+import net.minecraft.world.level.levelgen.feature.SequenceFeature;
 import net.minecraft.world.level.levelgen.feature.WeightedPlacedFeature;
-import net.minecraft.world.level.levelgen.feature.configurations.RandomFeatureConfiguration;
 import net.minecraft.world.level.levelgen.placement.EnvironmentScanPlacement;
 import net.minecraft.world.level.levelgen.placement.HeightRangePlacement;
 import net.minecraft.world.level.levelgen.placement.HeightmapPlacement;
@@ -25,7 +28,7 @@ import net.minecraft.world.level.levelgen.placement.InSquarePlacement;
 import net.minecraft.world.level.levelgen.placement.PlacedFeature;
 import net.minecraft.world.level.levelgen.placement.PlacementFilter;
 import net.minecraft.world.level.levelgen.placement.PlacementModifier;
-import net.minecraft.world.level.levelgen.placement.RandomOffsetPlacement;
+import net.minecraft.world.level.levelgen.placement.OffsetPlacement;
 import net.minecraft.world.level.levelgen.placement.RepeatingPlacement;
 
 public final class ChunkLocalPlacementClassifier {
@@ -34,7 +37,7 @@ public final class ChunkLocalPlacementClassifier {
 
 	public static Classification classify(
 		PlacedFeature feature,
-		Optional<ResourceLocation> featureId,
+		Optional<Identifier> featureId,
 		HolderLookup.Provider registries
 	) {
 		try {
@@ -46,7 +49,7 @@ public final class ChunkLocalPlacementClassifier {
 
 	private static Classification classifyChecked(
 		PlacedFeature feature,
-		Optional<ResourceLocation> featureId,
+		Optional<Identifier> featureId,
 		HolderLookup.Provider registries
 	) {
 		if (featureId.isEmpty()) {
@@ -55,7 +58,7 @@ public final class ChunkLocalPlacementClassifier {
 		if (!isChunkLocalRoot(feature.placement(), registries)) {
 			return Classification.rejected("NOT_CHUNK_LOCAL_ROOT");
 		}
-		Set<RandomOffsetPlacement> offsets = identitySet();
+		Set<OffsetPlacement> offsets = identitySet();
 		Set<PlacedFeature> visited = identitySet();
 		if (!collectConfiguredOffsets(feature.feature(), offsets, visited, registries)) {
 			return Classification.rejected("UNSUPPORTED_NESTED_PLACEMENT_PIPELINE");
@@ -75,7 +78,7 @@ public final class ChunkLocalPlacementClassifier {
 		for (PlacementModifier modifier : modifiers) {
 			if (modifier instanceof InSquarePlacement) {
 				selectors++;
-			} else if (modifier instanceof RandomOffsetPlacement offset) {
+			} else if (modifier instanceof OffsetPlacement offset) {
 				if (!isWholeChunkOffset(offset, registries)) {
 					return false;
 				}
@@ -90,25 +93,42 @@ public final class ChunkLocalPlacementClassifier {
 	}
 
 	private static boolean collectConfiguredOffsets(
-		Holder<ConfiguredFeature<?, ?>> configured,
-		Set<RandomOffsetPlacement> offsets,
+		Holder<Feature> configured,
+		Set<OffsetPlacement> offsets,
 		Set<PlacedFeature> visited,
 		HolderLookup.Provider registries
 	) {
-		if (!(configured.value().config() instanceof RandomFeatureConfiguration random)) {
+		Feature f = configured.value();
+		if (f instanceof RandomSelectorFeature random) {
+			for (WeightedPlacedFeature weighted : random.features()) {
+				if (!collectPlacedOffsets(weighted.feature(), offsets, visited, registries)) {
+					return false;
+				}
+			}
+			return collectPlacedOffsets(random.defaultFeature(), offsets, visited, registries);
+		}
+		if (f instanceof OverlayFeature overlay) {
+			for (Holder<PlacedFeature> sub : overlay.features()) {
+				if (!collectPlacedOffsets(sub, offsets, visited, registries)) {
+					return false;
+				}
+			}
 			return true;
 		}
-		for (WeightedPlacedFeature weighted : random.features) {
-			if (!collectPlacedOffsets(weighted.feature, offsets, visited, registries)) {
-				return false;
+		if (f instanceof SequenceFeature sequence) {
+			for (Holder<PlacedFeature> sub : sequence.features()) {
+				if (!collectPlacedOffsets(sub, offsets, visited, registries)) {
+					return false;
+				}
 			}
+			return true;
 		}
-		return collectPlacedOffsets(random.defaultFeature, offsets, visited, registries);
+		return true;
 	}
 
 	private static boolean collectPlacedOffsets(
 		Holder<PlacedFeature> holder,
-		Set<RandomOffsetPlacement> offsets,
+		Set<OffsetPlacement> offsets,
 		Set<PlacedFeature> visited,
 		HolderLookup.Provider registries
 	) {
@@ -118,7 +138,7 @@ public final class ChunkLocalPlacementClassifier {
 		}
 		int horizontalOffsets = 0;
 		for (PlacementModifier modifier : feature.placement()) {
-			if (modifier instanceof RandomOffsetPlacement offset) {
+			if (modifier instanceof OffsetPlacement offset) {
 				Bounds bounds = horizontalBounds(offset, registries);
 				if (bounds == null) {
 					return false;
@@ -144,48 +164,21 @@ public final class ChunkLocalPlacementClassifier {
 	}
 
 	private static boolean isWholeChunkOffset(
-		RandomOffsetPlacement placement,
+		OffsetPlacement placement,
 		HolderLookup.Provider registries
 	) {
-		JsonObject encoded = encode(placement, registries);
-		Bounds horizontal = bounds(encoded, "xz_spread", registries);
-		Bounds vertical = bounds(encoded, "y_spread", registries);
-		return horizontal != null && vertical != null
-			&& horizontal.min() == 0 && horizontal.max() == 15
-			&& vertical.min() == 0 && vertical.max() == 0;
+		return placement.x().minInclusive() == 0 && placement.x().maxInclusive() == 15
+			&& placement.z().minInclusive() == 0 && placement.z().maxInclusive() == 15
+			&& placement.y().minInclusive() == 0 && placement.y().maxInclusive() == 0;
 	}
 
 	private static Bounds horizontalBounds(
-		RandomOffsetPlacement placement,
+		OffsetPlacement placement,
 		HolderLookup.Provider registries
 	) {
-		return bounds(encode(placement, registries), "xz_spread", registries);
-	}
-
-	private static JsonObject encode(
-		RandomOffsetPlacement placement,
-		HolderLookup.Provider registries
-	) {
-		JsonElement encoded = RandomOffsetPlacement.CODEC.codec()
-			.encodeStart(RegistryOps.create(JsonOps.INSTANCE, registries), placement)
-			.result()
-			.orElse(null);
-		return encoded != null && encoded.isJsonObject() ? encoded.getAsJsonObject() : null;
-	}
-
-	private static Bounds bounds(
-		JsonObject encoded,
-		String member,
-		HolderLookup.Provider registries
-	) {
-		if (encoded == null || !encoded.has(member)) {
-			return null;
-		}
-		IntProvider provider = IntProvider.CODEC
-			.parse(RegistryOps.create(JsonOps.INSTANCE, registries), encoded.get(member))
-			.result()
-			.orElse(null);
-		return provider == null ? null : new Bounds(provider.getMinValue(), provider.getMaxValue());
+		int min = Math.min(placement.x().minInclusive(), placement.z().minInclusive());
+		int max = Math.max(placement.x().maxInclusive(), placement.z().maxInclusive());
+		return new Bounds(min, max);
 	}
 
 	private static <T> Set<T> identitySet() {
@@ -196,17 +189,17 @@ public final class ChunkLocalPlacementClassifier {
 	}
 
 	public record ChunkConfinement(
-		ResourceLocation featureId,
-		Set<RandomOffsetPlacement> offsets
+		Identifier featureId,
+		Set<OffsetPlacement> offsets
 	) {
 		public ChunkConfinement {
 			featureId = java.util.Objects.requireNonNull(featureId, "featureId");
-			Set<RandomOffsetPlacement> copy = identitySet();
+			Set<OffsetPlacement> copy = identitySet();
 			copy.addAll(offsets);
 			offsets = Collections.unmodifiableSet(copy);
 		}
 
-		public boolean contains(RandomOffsetPlacement placement) {
+		public boolean contains(OffsetPlacement placement) {
 			return this.offsets.contains(placement);
 		}
 	}

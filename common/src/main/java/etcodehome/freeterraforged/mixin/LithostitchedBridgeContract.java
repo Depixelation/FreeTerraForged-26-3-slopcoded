@@ -108,11 +108,17 @@ public final class LithostitchedBridgeContract {
 	private static boolean finalizerDescriptor(String descriptor) {
 		Type method = Type.getMethodType(descriptor);
 		Type[] arguments = method.getArgumentTypes();
-		return arguments.length == 3
+		return (arguments.length == 4
+			&& arguments[0].getSort() == Type.OBJECT
+			&& arguments[1].getSort() == Type.OBJECT
+			&& arguments[2].getSort() == Type.OBJECT
+			&& arguments[3].getSort() == Type.LONG
+			&& method.getReturnType().getSort() == Type.VOID)
+			|| (arguments.length == 3
 			&& arguments[0].getSort() == Type.OBJECT
 			&& arguments[1].getSort() == Type.OBJECT
 			&& arguments[2].getSort() == Type.LONG
-			&& method.getReturnType().getSort() == Type.VOID;
+			&& method.getReturnType().getSort() == Type.VOID);
 	}
 
 	private static String seamCall(MethodInsnNode call) {
@@ -135,8 +141,8 @@ public final class LithostitchedBridgeContract {
 				? "source.getCodec" : "invalid source.getCodec";
 		}
 		if (INJECTOR.equals(call.owner) && "applyInjectors".equals(call.name)) {
-			return ("(Ljava/util/Map;Ljava/util/Optional;Ljava/util/Map;L" + PREFIX
-				+ "api/worldgen/util/DensityFunctionWrapper;)V").equals(call.desc)
+			return ("(Ljava/util/Map;Ljava/util/Optional;Ljava/util/Map;Lnet/minecraft/world/level/levelgen/RandomState;)V".equals(call.desc)
+				|| ("(Ljava/util/Map;Ljava/util/Optional;Ljava/util/Map;L" + PREFIX + "api/worldgen/util/DensityFunctionWrapper;)V").equals(call.desc))
 				? "injector.applyInjectors" : "invalid injector.applyInjectors";
 		}
 		return null;

@@ -81,7 +81,7 @@ public class FastPoisson {
         while (region.hasNext()) {
             long neighbour = region.nextLong();
             if (neighbour == Long.MAX_VALUE) {
-                return false;
+                break;
             }
             if (point == neighbour) {
                 continue;

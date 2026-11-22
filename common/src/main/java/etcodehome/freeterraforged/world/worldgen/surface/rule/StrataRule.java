@@ -17,22 +17,21 @@ import com.mojang.serialization.codecs.RecordCodecBuilder;
 import net.minecraft.core.Holder;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.tags.TagKey;
-import net.minecraft.util.KeyDispatchDataCodec;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.levelgen.Heightmap;
-import net.minecraft.world.level.levelgen.SurfaceRules;
-import net.minecraft.world.level.levelgen.SurfaceRules.Context;
+import net.minecraft.world.level.levelgen.material.MaterialRuleContext;
+import net.minecraft.world.level.levelgen.material.rule.MaterialRule;
+import net.minecraft.world.level.levelgen.material.rule.RuleEvaluator;
 import etcodehome.freeterraforged.world.worldgen.noise.module.Noise;
 import etcodehome.freeterraforged.world.worldgen.surface.FTFSurfaceSystem;
 
-public record StrataRule(ResourceLocation name, Holder<Noise> selector, List<Strata> strata, int iterations) implements SurfaceRules.RuleSource {
+public record StrataRule(Identifier name, Holder<Noise> selector, List<Strata> strata, int iterations) implements MaterialRule {
 	public static final MapCodec<StrataRule> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
-			ResourceLocation.CODEC.fieldOf("name").forGetter(StrataRule::name),
+			Identifier.CODEC.fieldOf("name").forGetter(StrataRule::name),
 			Noise.CODEC.fieldOf("selector").forGetter(StrataRule::selector),
 			Strata.CODEC.listOf().fieldOf("strata").forGetter(StrataRule::strata),
 			Codec.INT.fieldOf("iterations").forGetter(StrataRule::iterations)
@@ -43,17 +42,18 @@ public record StrataRule(ResourceLocation name, Holder<Noise> selector, List<Str
 	}
 
 	@Override
-	public Source apply(Context ctx) {
-		if(ctx.system instanceof FTFSurfaceSystem ftfSurfaceSystem && (Object) ctx.randomState instanceof FTFRandomState ftfRandomState) {
+	public RuleEvaluator compile(MaterialRuleContext ctx) {
+		if((Object) ctx.system instanceof FTFSurfaceSystem ftfSurfaceSystem && (Object) ctx.randomState instanceof FTFRandomState ftfRandomState) {
 			return new Source(ctx, ftfRandomState.seed(this.selector.value()), ftfSurfaceSystem.getOrCreateStrata(this.name, this::generateStrata));
 		} else {
-			throw new IllegalStateException();
+			RandomSource fallbackRandom = RandomSource.create(ctx.randomState != null ? ctx.randomState.seed() : 0L);
+			return new Source(ctx, this.selector.value(), this.generateStrata(fallbackRandom));
 		}
 	}
 
 	@Override
-	public KeyDispatchDataCodec<StrataRule> codec() {
-		return new KeyDispatchDataCodec<>(CODEC);
+	public MapCodec<StrataRule> codec() {
+		return CODEC;
 	}
 
 	private List<List<Layer>> generateStrata(RandomSource random) {
@@ -84,6 +84,9 @@ public record StrataRule(ResourceLocation name, Holder<Noise> selector, List<Str
 			int layers = this.minLayers + NoiseUtil.round(random.nextFloat() * (this.maxLayers - this.minLayers));
 			List<Layer> result = new ArrayList<>();
 			List<Holder<Block>> materials = ImmutableList.copyOf(BuiltInRegistries.BLOCK.getTagOrEmpty(this.materials));
+			if (materials.isEmpty()) {
+				return result;
+			}
 
 			int seed = random.nextInt();
 			for (int i = 0; i < layers; i++) {
@@ -109,8 +112,8 @@ public record StrataRule(ResourceLocation name, Holder<Noise> selector, List<Str
 		}
 	}
 
-	private class Source implements SurfaceRules.SurfaceRule {
-		private final Context surfaceContext;
+	private class Source implements RuleEvaluator {
+		private final MaterialRuleContext surfaceContext;
 		private final Noise selector;
 		private final List<List<Layer>> strata;
 		private List<Layer> layers;
@@ -125,7 +128,7 @@ public record StrataRule(ResourceLocation name, Holder<Noise> selector, List<Str
 		private final float[][] quartRatios = new float[16][];
 		private int currentLayerIndex = 0;
 
-		public Source(Context surfaceContext, Noise selector, List<List<Layer>> strata) {
+		public Source(MaterialRuleContext surfaceContext, Noise selector, List<List<Layer>> strata) {
 			this.surfaceContext = surfaceContext;
 			this.selector = selector;
 			this.strata = strata;
@@ -136,7 +139,7 @@ public record StrataRule(ResourceLocation name, Holder<Noise> selector, List<Str
 		@Override
 		public BlockState tryApply(int x, int y, int z) {
 			if (this.lastUpdateXZ != this.surfaceContext.lastUpdateXZ) {
-				this.initBuffer(x, z);
+				this.initBuffer(x, y, z);
 				this.lastUpdateXZ = this.surfaceContext.lastUpdateXZ;
 			}
 
@@ -145,7 +148,6 @@ public record StrataRule(ResourceLocation name, Holder<Noise> selector, List<Str
 				return null;
 			}
 
-			// Surface building scans down monotonically. If y was called out of order, reset.
 			if (this.currentLayerIndex > 0 && y > this.depthBuffer[this.currentLayerIndex - 1]) {
 				this.currentLayerIndex = 0;
 			}
@@ -161,7 +163,7 @@ public record StrataRule(ResourceLocation name, Holder<Noise> selector, List<Str
 			return material;
 		}
 
-		private void initBuffer(int x, int z) {
+		private void initBuffer(int x, int yAtStart, int z) {
 			int chunkOriginX = x & ~0xF;
 			int chunkOriginZ = z & ~0xF;
 			if (chunkOriginX != this.currentChunkOriginX || chunkOriginZ != this.currentChunkOriginZ) {
@@ -209,7 +211,7 @@ public record StrataRule(ResourceLocation name, Holder<Noise> selector, List<Str
 				this.depthBuffer = new float[layerCount];
 			}
 
-			int height = this.surfaceContext.chunk.getHeight(Heightmap.Types.WORLD_SURFACE_WG, localX, localZ);
+			int height = Math.max(yAtStart + Math.max(0, this.surfaceContext.stoneDepthAbove() - 1), this.surfaceContext.getMinSurfaceLevel());
 			int y = height;
 			for (int i = 0; i < layerCount; i++) {
 				this.depthBuffer[i] = y -= Math.round(ratios[i] * height);

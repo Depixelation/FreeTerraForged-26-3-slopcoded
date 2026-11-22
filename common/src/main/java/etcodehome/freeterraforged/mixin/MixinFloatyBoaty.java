@@ -3,7 +3,7 @@ package etcodehome.freeterraforged.mixin;
 import etcodehome.freeterraforged.world.worldgen.ChunkFlowField;
 import etcodehome.freeterraforged.world.worldgen.IFlowFieldHolder;
 import net.minecraft.core.BlockPos;
-import net.minecraft.world.entity.vehicle.Boat;
+import net.minecraft.world.entity.vehicle.boat.AbstractBoat;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.phys.Vec3;
@@ -12,14 +12,12 @@ import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-import etcodehome.freeterraforged.world.worldgen.ChunkFlowField;
-import etcodehome.freeterraforged.world.worldgen.IFlowFieldHolder;
 import etcodehome.freeterraforged.world.worldgen.FlowSettingsSnapshot;
 import etcodehome.freeterraforged.world.worldgen.IFlowSettingsHolder;
 
-@Mixin(Boat.class)
+@Mixin(AbstractBoat.class)
 public abstract class MixinFloatyBoaty {
-    @Shadow private Boat.Status status;
+    @Shadow private AbstractBoat.Status status;
     @Shadow private boolean inputUp;
     @Shadow private boolean inputDown;
 
@@ -32,17 +30,17 @@ public abstract class MixinFloatyBoaty {
             method = "tick",
             at = @At(
                     value = "INVOKE",
-                    target = "Lnet/minecraft/world/entity/vehicle/Boat;move(Lnet/minecraft/world/entity/MoverType;Lnet/minecraft/world/phys/Vec3;)V"
+                    target = "Lnet/minecraft/world/entity/vehicle/boat/AbstractBoat;move(Lnet/minecraft/world/entity/MoverType;Lnet/minecraft/world/phys/Vec3;)V"
             )
     )
     private void applyRiverPhysics(CallbackInfo ci) {
 
-        Boat boat = (Boat) (Object) this;
+        AbstractBoat boat = (AbstractBoat) (Object) this;
 		Level level = boat.level();
 		FlowSettingsSnapshot flowSettings = ((IFlowSettingsHolder) level).freeterraforged$getFlowSettings();
 
         // Apply physics whenever in liquid, independent of vanilla river biome boundaries
-        if (this.status != Boat.Status.IN_AIR && this.status != Boat.Status.ON_LAND) {
+        if (this.status != AbstractBoat.Status.IN_AIR && this.status != AbstractBoat.Status.ON_LAND) {
             BlockPos pos = boat.blockPosition();
             ChunkAccess chunk = level.getChunk(pos);
 
@@ -67,7 +65,7 @@ public abstract class MixinFloatyBoaty {
 
                     // 1. Buoyancy / Waterfall Logic
 					boolean allowGoingUpWaterfalls = flowSettings.navigableWaterfalls();
-                    if (allowGoingUpWaterfalls && (this.status == Boat.Status.UNDER_WATER || this.status == Boat.Status.UNDER_FLOWING_WATER)) {
+                    if (allowGoingUpWaterfalls && (this.status == AbstractBoat.Status.UNDER_WATER || this.status == AbstractBoat.Status.UNDER_FLOWING_WATER)) {
                         motionY = (boat.getControllingPassenger() != null) ? 0.3 : 0.2;
                     }
 

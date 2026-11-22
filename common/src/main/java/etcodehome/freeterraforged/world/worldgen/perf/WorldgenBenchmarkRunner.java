@@ -45,8 +45,8 @@ import net.minecraft.world.level.levelgen.Heightmap;
  * </ul>
  */
 public final class WorldgenBenchmarkRunner {
-    private static final TicketType<Unit> BENCHMARK_TICKET =
-        TicketType.create("ftf_benchmark", (a, b) -> 0);
+    private static final TicketType BENCHMARK_TICKET =
+        new TicketType(0L, TicketType.FLAG_LOADING);
 
     private static final AtomicInteger AUTO_OFFSET_COUNTER = new AtomicInteger(0);
     private static volatile ActiveBenchmark activeBenchmark;
@@ -69,7 +69,7 @@ public final class WorldgenBenchmarkRunner {
         int probeX = 100_000 + runIndex * 50_000;
         int probeZ = 100_000 + runIndex * 50_000;
         ServerPlayer player = source.getPlayer();
-        ServerLevel level = player != null ? (ServerLevel) player.getCommandSenderWorld() : source.getServer().overworld();
+        ServerLevel level = player != null ? (ServerLevel) player.level() : source.getServer().overworld();
         BlockPos center = resolveContinentCenter(level, probeX, probeZ);
         return startBenchmark(source, radius, center.getX(), center.getZ(), false);
     }
@@ -115,7 +115,7 @@ public final class WorldgenBenchmarkRunner {
         }
         int clampedRadius = Math.max(1, Math.min(radius, 32));
         ServerPlayer player = source.getPlayer();
-        ServerLevel level = player != null ? (ServerLevel) player.getCommandSenderWorld() : source.getServer().overworld();
+        ServerLevel level = player != null ? (ServerLevel) player.level() : source.getServer().overworld();
 
         long worldSeed = level.getSeed();
         String terrainInfo = "unknown";
@@ -142,7 +142,7 @@ public final class WorldgenBenchmarkRunner {
                 level.getChunkSource().randomState()
             );
             int safeY = Math.max(level.getSeaLevel() + 2, Math.min(315, surfaceY + 3));
-            player.teleportTo(level, blockX + 0.5D, safeY, blockZ + 0.5D, player.getYRot(), player.getXRot());
+            player.teleportTo(level, blockX + 0.5D, safeY, blockZ + 0.5D, java.util.Set.of(), player.getYRot(), player.getXRot(), true);
             source.sendSystemMessage(Component.literal(String.format(
                 "[FTF-Perf] Teleported to (%d, %d, %d) [%s] for fresh chunk generation.",
                 blockX, safeY, blockZ, terrainInfo
@@ -175,12 +175,12 @@ public final class WorldgenBenchmarkRunner {
                 int cz = centerChunkZ + dz;
                 ChunkPos pos = new ChunkPos(cx, cz);
                 positions.add(pos);
-                chunkSource.addRegionTicket(BENCHMARK_TICKET, pos, 0, Unit.INSTANCE);
+                chunkSource.addTicketWithRadius(BENCHMARK_TICKET, pos, 0);
             }
         }
 
         for (ChunkPos pos : positions) {
-            futures.add(chunkSource.getChunkFuture(pos.x, pos.z, ChunkStatus.FULL, true));
+            futures.add(chunkSource.getChunkFuture(pos.x(), pos.z(), ChunkStatus.FULL, true));
         }
 
         activeBenchmark = new ActiveBenchmark(
@@ -264,7 +264,7 @@ public final class WorldgenBenchmarkRunner {
 
         // Release benchmark tickets
         for (ChunkPos pos : current.positions) {
-            chunkSource.removeRegionTicket(BENCHMARK_TICKET, pos, 0, Unit.INSTANCE);
+            chunkSource.removeTicketWithRadius(BENCHMARK_TICKET, pos, 0);
         }
 
         String header = String.format(
@@ -296,8 +296,8 @@ public final class WorldgenBenchmarkRunner {
                 .withStyle(style -> style
                     .withColor(ChatFormatting.AQUA)
                     .withUnderlined(true)
-                    .withClickEvent(new ClickEvent(ClickEvent.Action.OPEN_FILE, absPath))
-                    .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, Component.literal("Click to open report file")))
+                    .withClickEvent(new ClickEvent.OpenFile(absPath))
+                    .withHoverEvent(new HoverEvent.ShowText(Component.literal("Click to open report file")))
                 );
             current.source.sendSystemMessage(
                 Component.literal("[FTF-Perf] Full Report: ").withStyle(ChatFormatting.GREEN).append(linkComponent)

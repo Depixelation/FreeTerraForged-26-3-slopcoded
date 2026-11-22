@@ -15,6 +15,9 @@ import etcodehome.freeterraforged.world.worldgen.densityfunction.CellSampler;
 import etcodehome.freeterraforged.world.worldgen.perf.WorldgenPerfTracker;
 import etcodehome.freeterraforged.world.worldgen.surface.FTFSurfaceSystem;
 import etcodehome.freeterraforged.world.worldgen.surface.rule.StrataRule;
+import java.util.Set;
+import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import org.spongepowered.asm.mixin.Implements;
 import org.spongepowered.asm.mixin.Interface;
 import org.spongepowered.asm.mixin.Mixin;
@@ -25,8 +28,8 @@ import org.spongepowered.asm.mixin.injection.ModifyVariable;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.Registry;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.core.Holder;
+import net.minecraft.resources.Identifier;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.biome.BiomeManager;
@@ -38,25 +41,26 @@ import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.levelgen.NoiseChunk;
 import net.minecraft.world.level.levelgen.PositionalRandomFactory;
 import net.minecraft.world.level.levelgen.RandomState;
-import net.minecraft.world.level.levelgen.SurfaceRules;
-import net.minecraft.world.level.levelgen.SurfaceSystem;
 import net.minecraft.world.level.levelgen.WorldGenerationContext;
+import net.minecraft.world.level.levelgen.densityfunction.DensityFunction;
+import net.minecraft.world.level.levelgen.material.MaterialSystem;
+import net.minecraft.world.level.levelgen.material.rule.MaterialRule;
 import etcodehome.freeterraforged.FTFCommon;
 
-@Mixin(SurfaceSystem.class)
+@Mixin(MaterialSystem.class)
 @Implements(@Interface(iface = FTFSurfaceSystem.class, prefix = FTFCommon.MOD_ID + "$FTFSurfaceSystem$"))
 class MixinSurfaceSystem {
-	private static final ResourceLocation GEOLOGY_RANDOM = FTFCommon.location("geology");
+	private static final Identifier GEOLOGY_RANDOM = FTFCommon.location("geology");
 	private static final int[] NEIGHBOR_X = {0, 0, 1, -1};
 	private static final int[] NEIGHBOR_Z = {-1, 1, 0, 0};
 	private RandomState randomState;
-	private volatile Map<ResourceLocation, List<List<StrataRule.Layer>>> strata;
+	private volatile Map<Identifier, List<List<StrataRule.Layer>>> strata;
 
 	@Inject(
 			at = @At("TAIL"),
 			method = "<init>"
 	)
-	public void SurfaceSystem(RandomState randomState, BlockState blockState, int i, PositionalRandomFactory positionalRandomFactory, CallbackInfo callback) {
+	public void MaterialSystem(RandomState randomState, BlockState blockState, int i, DensityFunction preliminarySurfaceFunction, PositionalRandomFactory positionalRandomFactory, CallbackInfo callback) {
 		this.randomState = randomState;
 	}
 
@@ -71,12 +75,31 @@ class MixinSurfaceSystem {
 		return Math.floorMod(y, 192) + 3840;
 	}
 
+	@WrapMethod(method = "buildSurface")
+	private void freeterraforged$wrapBuildSurface(
+		RandomState randomState,
+		BiomeManager biomeManager,
+		WorldGenerationContext context,
+		ChunkAccess chunk,
+		NoiseChunk noiseChunk,
+		MaterialRule ruleSource,
+		Set<Holder<Biome>> biomes,
+		Operation<Void> original
+	) {
+		IChunkCellsHolder.ACTIVE_CHUNK.set(chunk);
+		try {
+			original.call(randomState, biomeManager, context, chunk, noiseChunk, ruleSource, biomes);
+		} finally {
+			IChunkCellsHolder.ACTIVE_CHUNK.remove();
+		}
+	}
+
 	@ModifyVariable(
 			method = "buildSurface",
 			at = @At("HEAD"),
 			argsOnly = true
 	)
-	private SurfaceRules.RuleSource freeterraforged$optimizeSurfaceRule(SurfaceRules.RuleSource ruleSource) {
+	private MaterialRule freeterraforged$optimizeSurfaceRule(MaterialRule ruleSource) {
 		if ((Object) this.randomState instanceof FTFRandomState ftfRandomState && ftfRandomState.generatorContext() != null) {
 			return etcodehome.freeterraforged.world.worldgen.surface.rule.FastStrataSequenceRule.optimize(ruleSource);
 		}
@@ -88,7 +111,7 @@ class MixinSurfaceSystem {
 			method = "buildSurface",
 			at = @At("HEAD")
 	)
-	private void onBuildSurface(RandomState randomState, BiomeManager biomeManager, Registry<Biome> biomes, boolean useLegacyRandom, WorldGenerationContext context, final ChunkAccess chunk, NoiseChunk noiseChunk, SurfaceRules.RuleSource ruleSource, CallbackInfo ci) {
+	private void onBuildSurface(RandomState randomState, BiomeManager biomeManager, WorldGenerationContext context, final ChunkAccess chunk, NoiseChunk noiseChunk, MaterialRule ruleSource, Set<Holder<Biome>> biomes, CallbackInfo ci) {
 		if ((Object) randomState instanceof FTFRandomState ftfRandomState) {
 			GeneratorContext genCtx = ftfRandomState.generatorContext();
 			if (genCtx != null) {
@@ -103,7 +126,7 @@ class MixinSurfaceSystem {
 		}
 	}
 
-	public List<List<StrataRule.Layer>> freeterraforged$FTFSurfaceSystem$getOrCreateStrata(ResourceLocation name, Function<RandomSource, List<List<StrataRule.Layer>>> strata) {
+	public List<List<StrataRule.Layer>> freeterraforged$FTFSurfaceSystem$getOrCreateStrata(Identifier name, Function<RandomSource, List<List<StrataRule.Layer>>> strata) {
 		return this.freeterraforged$strata().computeIfAbsent(name, (k) -> {
 			PositionalRandomFactory factory = this.randomState.getOrCreateRandomFactory(GEOLOGY_RANDOM);
 			return strata.apply(factory.fromHashOf(k));
@@ -111,8 +134,8 @@ class MixinSurfaceSystem {
 	}
 
 	@Unique
-	private Map<ResourceLocation, List<List<StrataRule.Layer>>> freeterraforged$strata() {
-		Map<ResourceLocation, List<List<StrataRule.Layer>>> current = this.strata;
+	private Map<Identifier, List<List<StrataRule.Layer>>> freeterraforged$strata() {
+		Map<Identifier, List<List<StrataRule.Layer>>> current = this.strata;
 		if (current != null) {
 			return current;
 		}
@@ -240,30 +263,30 @@ class MixinSurfaceSystem {
 							pos.set(globalX, wy, globalZ);
 
 							if (isTopBlock && isTransitionColumn && multiBlockDrop) {
-								chunk.setBlockState(pos, water, false);
-								chunk.markPosForPostprocessing(pos);
+								chunk.setBlockState(pos, water, 0);
+								chunk.markPosForPostProcessing(pos);
 							}
 							else if (isTopBlock && isTransitionColumn && !multiBlockDrop) {
-								if (biomeManager.getBiome(pos).value().coldEnoughToSnow(pos)) {
+								if (biomeManager.getBiome(pos).value().coldEnoughToSnow(pos, oceanY)) {
 									// Place Ice instead of liquid water to keep frozen rivers continuous
-									chunk.setBlockState(pos, Blocks.ICE.defaultBlockState(), false);
+									chunk.setBlockState(pos, Blocks.ICE.defaultBlockState(), 0);
 								} else {
-									chunk.setBlockState(pos, flowingWater, false);
+									chunk.setBlockState(pos, flowingWater, 0);
 								}
 							}
 							else if (!isTopBlock && multiBlockDrop) {
 								// If we are dropping multiple blocks, fill the gap down to the lowest neighbor with water instead of stone
 								if (wy > lowestNeighborWaterY) {
-									chunk.setBlockState(pos, flowingWater, false);
-									chunk.markPosForPostprocessing(pos);
+									chunk.setBlockState(pos, flowingWater, 0);
+									chunk.markPosForPostProcessing(pos);
 								} else {
-									chunk.setBlockState(pos, stone, false);
+									chunk.setBlockState(pos, stone, 0);
 								}
 							}
 							else {
-								chunk.setBlockState(pos, water, false);
+								chunk.setBlockState(pos, water, 0);
 								if (isTopBlock) {
-									chunk.markPosForPostprocessing(pos);
+									chunk.markPosForPostProcessing(pos);
 								}
 							}
 						}
@@ -316,7 +339,7 @@ class MixinSurfaceSystem {
 						if (isInRiverZone && isLowerThanWaterTable && isAboveOcean)  {
 							for (int wy = scaledY + 1; wy <= waterTableCeil; wy++) {
 								pos.set(globalX, wy, globalZ);
-								chunk.setBlockState(pos, stone, false);
+								chunk.setBlockState(pos, stone, 0);
 							}
 						}
 
@@ -324,7 +347,7 @@ class MixinSurfaceSystem {
 						if (maxNeighborWaterY > scaledY) {
 							for (int wy = scaledY + 1; wy <= maxNeighborWaterY; wy++) {
 								pos.set(globalX, wy, globalZ);
-								chunk.setBlockState(pos, stone, false);
+								chunk.setBlockState(pos, stone, 0);
 							}
 						}
 					}

@@ -3,38 +3,48 @@ package etcodehome.freeterraforged.world.worldgen.feature.chance;
 import java.util.List;
 
 import com.mojang.serialization.Codec;
+import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.util.RandomSource;
+import net.minecraft.world.level.WorldGenLevel;
+import net.minecraft.world.level.chunk.ChunkGenerator;
 import net.minecraft.world.level.levelgen.feature.Feature;
-import net.minecraft.world.level.levelgen.feature.FeaturePlaceContext;
-import net.minecraft.world.level.levelgen.feature.configurations.FeatureConfiguration;
 import net.minecraft.world.level.levelgen.placement.PlacedFeature;
-import etcodehome.freeterraforged.world.worldgen.feature.chance.ChanceFeature.Config;
 
-public class ChanceFeature extends Feature<Config> {
+public class ChanceFeature implements Feature {
+	public static final MapCodec<ChanceFeature> CODEC = Config.MAP_CODEC.xmap(ChanceFeature::new, ChanceFeature::config);
 
-	public ChanceFeature(Codec<Config> codec) {
-		super(codec);
+	private final Config config;
+
+	public ChanceFeature(Config config) {
+		this.config = config;
+	}
+
+	public Config config() {
+		return this.config;
 	}
 
 	@Override
-	public boolean place(FeaturePlaceContext<Config> ctx) {
-		RandomSource random = ctx.random();
-		Config config = ctx.config();
-		
-		int entryCount = config.entries.size();
+	public MapCodec<ChanceFeature> codec() {
+		return CODEC;
+	}
+
+	@Override
+	public boolean place(WorldGenLevel level, ChunkGenerator chunkGenerator, RandomSource random, BlockPos origin) {
+		int entryCount = this.config.entries.size();
 		ChanceContext chanceCtx = ChanceContext.make(entryCount);
         for (int i = 0; i < entryCount; i++) {
-            Entry entry = config.entries.get(i);
-            float chance = entry.getChance(chanceCtx, ctx);
+            Entry entry = this.config.entries.get(i);
+            float chance = entry.getChance(chanceCtx, level, origin);
             chanceCtx.record(i, chance);
         }
 
         int index = chanceCtx.nextIndex(random);
         if (index > -1) {
-            return config.entries.get(index).feature.value().place(ctx.level(), ctx.chunkGenerator(), random, ctx.origin());
+            return this.config.entries.get(index).feature.value().place(level, chunkGenerator, random, origin);
         }
 		return false;
 	}
@@ -46,18 +56,19 @@ public class ChanceFeature extends Feature<Config> {
 			ChanceModifier.CODEC.listOf().fieldOf("modifiers").forGetter(Entry::modifiers)
 		).apply(instance, Entry::new));
 		
-		public float getChance(ChanceContext chanceCtx, FeaturePlaceContext<?> placeCtx) {
+		public float getChance(ChanceContext chanceCtx, WorldGenLevel level, BlockPos origin) {
 			float chance = this.chance;
 			for (ChanceModifier modifier : this.modifiers) {
-				chance *= modifier.getChance(chanceCtx, placeCtx);
+				chance *= modifier.getChance(chanceCtx, level, origin);
 			}
 			return chance;
 		}
 	}
 	
-	public record Config(List<Entry> entries) implements FeatureConfiguration {
-		public static final Codec<Config> CODEC = RecordCodecBuilder.create(instance -> instance.group(
+	public record Config(List<Entry> entries) {
+		public static final MapCodec<Config> MAP_CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
 			Entry.CODEC.listOf().fieldOf("entries").forGetter(Config::entries)
 		).apply(instance, Config::new));
+		public static final Codec<Config> CODEC = MAP_CODEC.codec();
 	}
 }

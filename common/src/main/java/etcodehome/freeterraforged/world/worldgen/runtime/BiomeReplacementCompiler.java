@@ -16,7 +16,7 @@ import net.minecraft.core.Holder;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceKey;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.level.biome.Biome;
 import etcodehome.freeterraforged.platform.ModLoaderUtil;
@@ -60,12 +60,12 @@ public final class BiomeReplacementCompiler {
 				diagnostics.add(diagnostic);
 			}
 		}
-		ResourceLocation dimension = owner.dimension().location();
+		Identifier dimension = owner.dimension().identifier();
 		if (invalidatesConfig(diagnostics)) {
 			return ignoredConfig(snapshot, dimension, diagnostics);
 		}
 
-		Registry<Biome> biomes = owner.registries().registryOrThrow(Registries.BIOME);
+		Registry<Biome> biomes = owner.registries().lookupOrThrow(Registries.BIOME);
 		Scope global = new Scope();
 		Scope selectedDimension = new Scope();
 		int ruleIndex = 0;
@@ -75,7 +75,7 @@ public final class BiomeReplacementCompiler {
 			if (rule.dimension() == null) {
 				scope = global;
 			} else {
-				ResourceLocation ruleDimension = ResourceLocation.tryParse(rule.dimension());
+				Identifier ruleDimension = Identifier.tryParse(rule.dimension());
 				if (ruleDimension == null) {
 					bindingFailure(
 						config, diagnostics, rule.line(), new RuleBindingException(
@@ -225,9 +225,9 @@ public final class BiomeReplacementCompiler {
 			return;
 		}
 
-		ResourceLocation tagId = parseId(rule.selector(), "biome tag");
+		Identifier tagId = parseId(rule.selector(), "biome tag");
 		TagKey<Biome> tag = TagKey.create(Registries.BIOME, tagId);
-		var resolvedTag = biomes.getTag(tag);
+		var resolvedTag = biomes.get(tag);
 		if (resolvedTag.isEmpty()) {
 			ignoredReference(
 				config, diagnostics, rule.line(), "missing_tag",
@@ -296,15 +296,15 @@ public final class BiomeReplacementCompiler {
 		String id,
 		String role
 	) throws RuleBindingException {
-		ResourceLocation location = parseId(id, role + " biome");
+		Identifier location = parseId(id, role + " biome");
 		ResourceKey<Biome> key = ResourceKey.create(Registries.BIOME, location);
-		return biomes.getHolder(key).orElseThrow(() -> new RuleBindingException(
+		return biomes.get(key).orElseThrow(() -> new RuleBindingException(
 			"missing_biome", "Biome " + role + " '" + location + "' does not exist", false
 		));
 	}
 
-	private static ResourceLocation parseId(String id, String role) throws RuleBindingException {
-		ResourceLocation location = ResourceLocation.tryParse(id);
+	private static Identifier parseId(String id, String role) throws RuleBindingException {
+		Identifier location = Identifier.tryParse(id);
 		if (location == null) {
 			throw new RuleBindingException(
 				"invalid_resource_location", "Invalid " + role + " ID '" + id + "'", false
@@ -437,7 +437,7 @@ public final class BiomeReplacementCompiler {
 
 	private static BiomeReplacementPlan ignoredConfig(
 		BiomeReplacementConfigSnapshot snapshot,
-		ResourceLocation dimension,
+		Identifier dimension,
 		List<BiomeReplacementConfig.Diagnostic> diagnostics
 	) {
 		List<BiomeReplacementConfig.Diagnostic> reported = new ArrayList<>(diagnostics);
@@ -464,7 +464,7 @@ public final class BiomeReplacementCompiler {
 	}
 
 	private static String biomeId(Holder<Biome> biome) {
-		return biome.unwrapKey().map(key -> key.location().toString()).orElse("<unregistered>");
+		return biome.unwrapKey().map(key -> key.identifier().toString()).orElse("<unregistered>");
 	}
 
 	private static BiomeReplacementConfig.Diagnostic info(String code, int line, String message) {

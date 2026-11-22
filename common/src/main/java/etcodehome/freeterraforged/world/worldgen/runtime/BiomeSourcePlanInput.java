@@ -10,12 +10,12 @@ import java.util.Set;
 import net.minecraft.core.Holder;
 import net.minecraft.core.Registry;
 import net.minecraft.resources.ResourceKey;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.biome.Climate;
 
 public record BiomeSourcePlanInput(
-	ResourceLocation id,
+	Identifier id,
 	Set<Holder<Biome>> possibleOutputs,
 	WorldgenQueryMode queryMode,
 	Query query
@@ -55,10 +55,10 @@ public record BiomeSourcePlanInput(
 					"Custom biome-source plan " + this.id
 						+ " declares an output absent from the selected biome registry"
 				));
-			Holder.Reference<Biome> canonical = biomes.getHolder(key).orElseThrow(() ->
+			Holder.Reference<Biome> canonical = biomes.get(key).orElseThrow(() ->
 				new IllegalArgumentException(
 					"Custom biome-source plan " + this.id + " declares missing biome "
-						+ key.location()
+						+ key.identifier()
 				)
 			);
 			canonicalByDeclared.put(declared, canonical);

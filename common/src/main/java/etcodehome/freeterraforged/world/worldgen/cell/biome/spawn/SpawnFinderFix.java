@@ -13,8 +13,14 @@ import net.minecraft.world.level.biome.Climate.TargetPoint;
 public class SpawnFinderFix {
 	public Result result;
 
+	public SpawnFinderFix(BlockPos center, List<ParameterPoint> list, Sampler sampler) {
+		this.result = SpawnFinderFix.getSpawnPositionAndFitness(list, sampler, center.getX(), center.getZ());
+		this.radialSearch(list, sampler, 2048.0f, 512.0f);
+		this.radialSearch(list, sampler, 512.0f, 32.0f);
+	}
+
 	public SpawnFinderFix(List<ParameterPoint> list, Sampler sampler) {
-		if ((Object) sampler instanceof FTFClimateSampler rtfClimateSampler) {
+		if ((Object) sampler instanceof FTFClimateSampler rtfClimateSampler && rtfClimateSampler.getSpawnSearch() != null) {
 			BlockPos center = rtfClimateSampler.getSpawnSearch().center();
 
 			this.result = SpawnFinderFix.getSpawnPositionAndFitness(list, sampler, center.getX(), center.getZ());

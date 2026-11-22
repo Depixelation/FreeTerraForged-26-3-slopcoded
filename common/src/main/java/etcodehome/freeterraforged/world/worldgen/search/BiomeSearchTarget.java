@@ -6,7 +6,7 @@ import java.util.function.Predicate;
 import net.minecraft.core.Holder;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceKey;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.level.biome.Biome;
 
@@ -35,10 +35,10 @@ public final class BiomeSearchTarget implements Predicate<Holder<Biome>> {
 		}
 		try {
 			if (value.startsWith("#")) {
-				ResourceLocation id = ResourceLocation.parse(value.substring(1));
+				Identifier id = Identifier.parse(value.substring(1));
 				return new BiomeSearchTarget(value, null, TagKey.create(Registries.BIOME, id));
 			}
-			ResourceLocation id = ResourceLocation.parse(value);
+			Identifier id = Identifier.parse(value);
 			return new BiomeSearchTarget(value, ResourceKey.create(Registries.BIOME, id), null);
 		} catch (RuntimeException failure) {
 			throw new IllegalArgumentException("Invalid biome ID or tag: " + value + ".", failure);

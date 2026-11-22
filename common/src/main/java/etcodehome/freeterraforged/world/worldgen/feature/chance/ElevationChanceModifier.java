@@ -7,7 +7,7 @@ import etcodehome.freeterraforged.world.worldgen.FTFRandomState;
 import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
 import etcodehome.freeterraforged.world.worldgen.cell.Cell;
 import net.minecraft.core.BlockPos;
-import net.minecraft.world.level.levelgen.feature.FeaturePlaceContext;
+import net.minecraft.world.level.WorldGenLevel;
 import org.jetbrains.annotations.Nullable;
 
 class ElevationChanceModifier extends RangeChanceModifier {
@@ -27,11 +27,10 @@ class ElevationChanceModifier extends RangeChanceModifier {
 	}
 
 	@Override
-	protected float getValue(ChanceContext chanceCtx, FeaturePlaceContext<?> placeCtx) {
-		BlockPos pos = placeCtx.origin();
+	protected float getValue(ChanceContext chanceCtx, WorldGenLevel level, BlockPos pos) {
 		@Nullable
         GeneratorContext generatorContext;
-		if((Object) placeCtx.level().getLevel().getChunkSource().randomState() instanceof FTFRandomState ftfRandomState && (generatorContext = ftfRandomState.generatorContext()) != null) {
+		if((Object) level.getLevel().getChunkSource().randomState() instanceof FTFRandomState ftfRandomState && (generatorContext = ftfRandomState.generatorContext()) != null) {
 			int x = pos.getX();
 			int z = pos.getZ();
 			Cell cell = new Cell();

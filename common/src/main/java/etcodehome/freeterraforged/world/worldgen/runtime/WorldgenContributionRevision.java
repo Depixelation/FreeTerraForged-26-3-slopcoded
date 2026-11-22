@@ -7,7 +7,7 @@ import java.util.Objects;
 import java.util.OptionalLong;
 
 import net.minecraft.resources.ResourceKey;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.dimension.LevelStem;
 
 public final class WorldgenContributionRevision {
@@ -25,7 +25,7 @@ public final class WorldgenContributionRevision {
 		WorldgenProviderCatalog catalog
 	) {
 		Map<RevisionKey, Long> values = new LinkedHashMap<>();
-		Map<ResourceLocation, CapabilityFailure> failures = new LinkedHashMap<>();
+		Map<Identifier, CapabilityFailure> failures = new LinkedHashMap<>();
 		WorldgenProviderCatalog.Resolution resolution = catalog.resolveContributionRevisions();
 		resolution.failures().forEach(failed -> failures.put(failed.metadata().id(), failed.failure()));
 		for (WorldgenProviderCatalog.ProviderBinding binding : resolution.providers()) {
@@ -42,17 +42,17 @@ public final class WorldgenContributionRevision {
 				if (value < 0L) {
 					throw new IllegalArgumentException("Contribution revision must be non-negative");
 				}
-				values.put(new RevisionKey(binding.metadata().id(), dimension.location()), value);
+				values.put(new RevisionKey(binding.metadata().id(), dimension.identifier()), value);
 			} catch (RuntimeException | LinkageError failure) {
 				failures.put(binding.metadata().id(), CapabilityFailure.of(
 					"provider_contribution_revision_failed", failure
 				));
 			}
 		}
-		return new Snapshot(dimension.location(), values, failures);
+		return new Snapshot(dimension.identifier(), values, failures);
 	}
 
-	public record RevisionKey(ResourceLocation mechanism, ResourceLocation scope) {
+	public record RevisionKey(Identifier mechanism, Identifier scope) {
 		public RevisionKey {
 			mechanism = Objects.requireNonNull(mechanism, "mechanism");
 			scope = Objects.requireNonNull(scope, "scope");
@@ -60,11 +60,11 @@ public final class WorldgenContributionRevision {
 	}
 
 	public record Snapshot(
-		ResourceLocation dimension,
+		Identifier dimension,
 		Map<RevisionKey, Long> revisions,
-		Map<ResourceLocation, CapabilityFailure> failures
+		Map<Identifier, CapabilityFailure> failures
 	) {
-		public Snapshot(ResourceLocation dimension, Map<RevisionKey, Long> revisions) {
+		public Snapshot(Identifier dimension, Map<RevisionKey, Long> revisions) {
 			this(dimension, revisions, Map.of());
 		}
 
@@ -78,11 +78,11 @@ public final class WorldgenContributionRevision {
 			}
 		}
 
-		public static Snapshot empty(ResourceLocation dimension) {
+		public static Snapshot empty(Identifier dimension) {
 			return new Snapshot(dimension, Map.of(), Map.of());
 		}
 
-		public java.util.Optional<CapabilityFailure> failure(ResourceLocation provider) {
+		public java.util.Optional<CapabilityFailure> failure(Identifier provider) {
 			return java.util.Optional.ofNullable(this.failures.get(provider));
 		}
 

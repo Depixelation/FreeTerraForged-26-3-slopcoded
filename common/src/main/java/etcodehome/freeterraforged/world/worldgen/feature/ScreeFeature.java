@@ -3,12 +3,14 @@ package etcodehome.freeterraforged.world.worldgen.feature;
 import org.jetbrains.annotations.Nullable;
 
 import com.mojang.serialization.Codec;
+import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.BlockPos.MutableBlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.tags.BlockTags;
+import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.WorldGenLevel;
 import net.minecraft.world.level.biome.Biome;
@@ -21,8 +23,6 @@ import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.level.levelgen.NoiseBasedChunkGenerator;
 import net.minecraft.world.level.levelgen.RandomState;
 import net.minecraft.world.level.levelgen.feature.Feature;
-import net.minecraft.world.level.levelgen.feature.FeaturePlaceContext;
-import net.minecraft.world.level.levelgen.feature.configurations.FeatureConfiguration;
 import etcodehome.freeterraforged.tags.FTFBlockTags;
 import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
 import etcodehome.freeterraforged.world.worldgen.FTFRandomState;
@@ -31,7 +31,6 @@ import etcodehome.freeterraforged.world.worldgen.cell.Cell;
 import etcodehome.freeterraforged.world.worldgen.cell.heightmap.Levels;
 import etcodehome.freeterraforged.world.worldgen.cell.rivermap.ContinentalHydrology;
 import etcodehome.freeterraforged.world.worldgen.cell.terrain.TerrainType;
-import etcodehome.freeterraforged.world.worldgen.feature.ScreeFeature.Config;
 import etcodehome.freeterraforged.world.worldgen.noise.module.Noise;
 import etcodehome.freeterraforged.world.worldgen.noise.module.Noises;
 
@@ -40,7 +39,8 @@ import java.util.Map;
 import java.util.NavigableMap;
 import java.util.TreeMap;
 
-public class ScreeFeature extends Feature<Config> {
+public class ScreeFeature implements Feature {
+    public static final MapCodec<ScreeFeature> CODEC = Config.MAP_CODEC.xmap(ScreeFeature::new, ScreeFeature::config);
 
     // Internal fixed modifiers
     private static final float SEDIMENT_NOISE = 3F / 255F;
@@ -66,22 +66,31 @@ public class ScreeFeature extends Feature<Config> {
             new WeightedBlockEntry(Blocks.GRAVEL.defaultBlockState(), 1)
     ));
 
-    public ScreeFeature(Codec<Config> codec) {
-        super(codec);
+    private final Config config;
+
+    public ScreeFeature(Config config) {
+        this.config = config;
+    }
+
+    public Config config() {
+        return this.config;
     }
 
     @Override
-    public boolean place(FeaturePlaceContext<Config> placeContext) {
-        WorldGenLevel level = placeContext.level();
+    public MapCodec<ScreeFeature> codec() {
+        return CODEC;
+    }
+
+    @Override
+    public boolean place(WorldGenLevel level, ChunkGenerator generator, RandomSource random, BlockPos origin) {
         RandomState randomState = level.getLevel().getChunkSource().randomState();
 
         @Nullable
         GeneratorContext generatorContext;
         if((Object) randomState instanceof FTFRandomState ftfRandomState && (generatorContext = ftfRandomState.generatorContext()) != null) {
-            ChunkPos chunkPos = new ChunkPos(placeContext.origin());
-            int chunkX = chunkPos.x;
-            int chunkZ = chunkPos.z;
-            ChunkGenerator generator = placeContext.chunkGenerator();
+            ChunkPos chunkPos = ChunkPos.containing(origin);
+            int chunkX = chunkPos.x();
+            int chunkZ = chunkPos.z();
             ChunkAccess chunk = level.getChunk(chunkX, chunkZ);
             etcodehome.freeterraforged.world.worldgen.cell.heightmap.Heightmap heightmap = generatorContext.heightmap;
             Levels levels = heightmap.levels();
@@ -93,7 +102,7 @@ public class ScreeFeature extends Feature<Config> {
             Noise warpZ = noises != null ? noises.warpZ : Noises.perlin((int) (heightmap.climate().randomSeed() + 2002), 2, 1);
             Noise desertErosionVariance = noises != null ? noises.desertErosionVariance : makeDesertErosionVariance(levels);
             BlockPos.MutableBlockPos pos = new MutableBlockPos();
-            Config config = placeContext.config();
+            Config config = this.config;
             IChunkCellsHolder cellsHolder = chunk instanceof IChunkCellsHolder h ? h : null;
             Cell[] chunkCells = cellsHolder != null ? cellsHolder.freeterraforged$getOrCreateChunkCells(generatorContext) : null;
             for(int z = 0; z < 16; z++) {
@@ -158,16 +167,16 @@ public class ScreeFeature extends Feature<Config> {
                 if (cell.gradient > 0.975) {
                     state = Blocks.TERRACOTTA.defaultBlockState();
                 } else if (cell.gradient > 0.85) {
-                    state = Blocks.BROWN_TERRACOTTA.defaultBlockState();
+                    state = Blocks.DYED_TERRACOTTA.brown().defaultBlockState();
                 } else if (cell.gradient > 0.75) {
-                    state = Blocks.ORANGE_TERRACOTTA.defaultBlockState();
+                    state = Blocks.DYED_TERRACOTTA.orange().defaultBlockState();
                 } else if (cell.gradient > 0.65) {
                     state = Blocks.TERRACOTTA.defaultBlockState();
                 }
             }
 
             for (int dy = 0; dy < 4; dy++) {
-                chunk.setBlockState(pos.setY(surfaceY - dy), state, false);
+                chunk.setBlockState(pos.setY(surfaceY - dy), state);
             }
         }
     }
@@ -285,13 +294,13 @@ public class ScreeFeature extends Feature<Config> {
         int x = pos.getX();
         int z = pos.getZ();
 
-        if (state.is(Blocks.GRASS_BLOCK) || state.is(Blocks.MYCELIUM)) {
+        if (state.is(Blocks.GRASS_BLOCK) || state.is(Blocks.MYCELIUM) || state.is(Blocks.PODZOL) || state.is(BlockTags.GRASS_BLOCKS)) {
             return sampleMaterial(DIRT_MATERIALS, x, z, clusterNoise, warpX, warpZ, rand, 4, Blocks.COARSE_DIRT.defaultBlockState());
         }
         if (state.is(BlockTags.BASE_STONE_OVERWORLD)) {
             return Blocks.MOSS_BLOCK.defaultBlockState();
         }
-        if (state.is(BlockTags.DIRT)) {
+        if (state.is(BlockTags.DIRT) || state.is(BlockTags.SUBSTRATE_OVERWORLD) || state.is(BlockTags.SUPPORTS_VEGETATION)) {
             return state;
         }
         if (state.is(Blocks.SAND)) {
@@ -391,9 +400,8 @@ public class ScreeFeature extends Feature<Config> {
             int rockVar, int rockMin, int dirtVar, int dirtMin,
             float rockSteepness, float dirtSteepness, float screeSteepness,
             float heightModifier, float slopeModifier
-    ) implements FeatureConfiguration {
-
-        public static final Codec<Config> CODEC = RecordCodecBuilder.create(instance -> instance.group(
+    ) {
+        public static final MapCodec<Config> MAP_CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
                 Codec.INT.fieldOf("rock_var").forGetter(Config::rockVar),
                 Codec.INT.fieldOf("rock_min").forGetter(Config::rockMin),
                 Codec.INT.fieldOf("dirt_var").forGetter(Config::dirtVar),
@@ -404,5 +412,6 @@ public class ScreeFeature extends Feature<Config> {
                 Codec.FLOAT.fieldOf("height_modifier").forGetter(Config::heightModifier),
                 Codec.FLOAT.fieldOf("slope_modifier").forGetter(Config::slopeModifier)
         ).apply(instance, Config::new));
+        public static final Codec<Config> CODEC = MAP_CODEC.codec();
     }
 }

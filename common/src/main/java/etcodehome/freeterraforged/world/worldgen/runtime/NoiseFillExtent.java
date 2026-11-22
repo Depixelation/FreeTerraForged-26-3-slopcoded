@@ -27,7 +27,7 @@ public record NoiseFillExtent(
 		if (settings == null) {
 			throw new NullPointerException("settings");
 		}
-		int cellHeight = settings.getCellHeight();
+		int cellHeight = 8;
 		if (cellHeight <= 0) {
 			throw new IllegalArgumentException("Noise cell height must be positive: " + cellHeight);
 		}

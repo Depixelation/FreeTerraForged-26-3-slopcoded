@@ -7,6 +7,7 @@ import java.lang.reflect.RecordComponent;
 import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.List;
+import com.mojang.serialization.MapCodec;
 import org.jetbrains.annotations.Nullable;
 import net.minecraft.core.Holder;
 import net.minecraft.tags.BiomeTags;
@@ -14,66 +15,51 @@ import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.biome.Biomes;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.levelgen.SurfaceRules;
+import net.minecraft.world.level.levelgen.material.MaterialRuleContext;
+import net.minecraft.world.level.levelgen.material.MaterialRules;
+import net.minecraft.world.level.levelgen.material.rule.MaterialRule;
+import net.minecraft.world.level.levelgen.material.rule.RuleEvaluator;
 import etcodehome.freeterraforged.world.worldgen.perf.WorldgenPerfTracker;
 import etcodehome.freeterraforged.world.worldgen.surface.ISurfaceContext;
 
-/**
- * High-performance surface rule evaluator that short-circuits evaluation when deep underground.
- *
- * <p>In FreeTerraForged, {@link StrataRule} may be placed at the end of the surface rules sequence
- * to generate realistic rock layers (granite, diorite, andesite) throughout underground stone.
- * In mountains and highlands (Y up to 350+), every column contains hundreds of blocks of solid rock.
- * Without this fast-path, every single underground block evaluates dozens of surface and biome conditions
- * (grass, snow, calcite, water, cave features) only for all of them to fail and fall through to StrataRule
- * or return null.
- *
- * <p>When well below the surface ({@code stoneDepthAbove > 30}), well above caves ({@code stoneDepthBelow > 20}),
- * and above deepslate ({@code y > 8}), surface rules never match in any non-badlands biome. This wrapper
- * bypasses the entire base surface rule tree and delegates directly to StrataRule (or returns null if no strata),
- * saving tens of millions of redundant condition evaluations per benchmark run.
- */
-public class FastStrataSequenceRule implements SurfaceRules.SurfaceRule {
-	private final SurfaceRules.Context context;
-	private final SurfaceRules.SurfaceRule base;
-	private final @Nullable SurfaceRules.SurfaceRule strata;
+public class FastStrataSequenceRule implements RuleEvaluator {
+	private final MaterialRuleContext context;
+	private final RuleEvaluator base;
+	private final @Nullable RuleEvaluator strata;
 	private final int minBedrockY;
 	private long lastCheckedXZ = Long.MIN_VALUE;
 	private boolean isBadlands;
 	private boolean isDesert;
 
 	public FastStrataSequenceRule(
-			SurfaceRules.Context context,
-			SurfaceRules.SurfaceRule base,
-			@Nullable SurfaceRules.SurfaceRule strata
+			MaterialRuleContext context,
+			RuleEvaluator base,
+			@Nullable RuleEvaluator strata
 	) {
 		this.context = context;
 		this.base = base;
 		this.strata = strata;
-		this.minBedrockY = (context.context != null ? context.context.getMinGenY() : (context.chunk != null ? context.chunk.getMinBuildHeight() : -64)) + 5;
+		this.minBedrockY = (context.context != null ? context.context.getMinGenY() : -64) + 5;
 	}
 
 	@Override
 	public BlockState tryApply(int x, int y, int z) {
 		if (this.lastCheckedXZ != this.context.lastUpdateXZ) {
 			this.lastCheckedXZ = this.context.lastUpdateXZ;
-			Holder<Biome> biomeHolder = this.context.biome != null ? this.context.biome.get() : null;
+			Holder<Biome> biomeHolder = this.context.biome != null ? this.context.biome : this.context.getBiome();
 			this.isBadlands = biomeHolder != null && biomeHolder.is(BiomeTags.IS_BADLANDS);
 			this.isDesert = biomeHolder != null && (biomeHolder.is(Biomes.DESERT)
-					|| biomeHolder.unwrapKey().map(k -> k.location().getPath().contains("desert")).orElse(false));
+					|| biomeHolder.unwrapKey().map(k -> k.identifier().getPath().contains("desert")).orElse(false));
 		}
 
-		// Fast-path for underground solid rock (stone above Y=8, deepslate below Y=0):
-		if (!this.isBadlands && ((Object) this.context) instanceof ISurfaceContext sc) {
-			int depthAbove = sc.freeterraforged$getStoneDepthAbove();
-			int depthBelow = sc.freeterraforged$getStoneDepthBelow();
+		if (!this.isBadlands) {
+			int depthAbove = ((Object) this.context) instanceof ISurfaceContext sc
+				? sc.freeterraforged$getStoneDepthAbove()
+				: this.context.stoneDepthAbove();
+			int depthBelow = ((Object) this.context) instanceof ISurfaceContext sc
+				? sc.freeterraforged$getStoneDepthBelow()
+				: this.context.stoneDepthBelow();
 
-			// Deepslate zone (below Y=0 down to bedrock boundary Y=-58):
-			// Keep depthAbove > 10 and depthBelow > 4 to safely clear cave floors (lush cave clay, dripstone, rooted dirt)
-			// and cave ceiling features (hanging roots, stalactites).
-			// Note: When stone extends to the bottom of the world without caves below, Minecraft's stoneDepthBelow
-			// underflows to <= 0 (currentY - WAY_BELOW_MIN_Y + 1). Thus (depthBelow <= 0 || depthBelow > 4) ensures
-			// we are safe from cave ceilings even in completely solid columns.
 			if (y <= 0 && y > this.minBedrockY && depthAbove > 10 && (depthBelow <= 0 || depthBelow > 4)) {
 				if (WorldgenPerfTracker.ACTIVE) {
 					WorldgenPerfTracker.stats().strataFastPathHits++;
@@ -87,11 +73,6 @@ public class FastStrataSequenceRule implements SurfaceRules.SurfaceRule {
 				return Blocks.DEEPSLATE.defaultBlockState();
 			}
 
-			// Stone & Strata zone (above deepslate transition Y > 8):
-			// Use minDepthAbove = 20 to guarantee all vanilla and modded surface materials (sand, sandstone dunes,
-			// gravel beaches, coarse dirt, mud, rooted dirt, and cave floors) are fully resolved before short-circuiting.
-			// Ceilings check depthBelow > 4 to protect hanging ceiling formations.
-			// Note: As above, depthBelow <= 0 indicates solid stone extending to bedrock without any cave below.
 			int minDepthAbove = 20;
 			if (y > 8 && depthAbove > minDepthAbove && (depthBelow <= 0 || depthBelow > 4)) {
 				if (WorldgenPerfTracker.ACTIVE) {
@@ -111,16 +92,16 @@ public class FastStrataSequenceRule implements SurfaceRules.SurfaceRule {
 		return this.strata != null ? this.strata.tryApply(x, y, z) : null;
 	}
 
-	public static SurfaceRules.RuleSource optimize(SurfaceRules.RuleSource root) {
+	public static MaterialRule optimize(MaterialRule root) {
 		if (root == null || root instanceof Source) {
 			return root;
 		}
 		StrataRule strata = findStrataRule(root);
-		SurfaceRules.RuleSource base = strata != null ? removeStrataRule(root, strata) : root;
-		return new Source(base != null ? base : SurfaceRules.sequence(), strata);
+		MaterialRule base = strata != null ? removeStrataRule(root, strata) : root;
+		return new Source(base != null ? base : MaterialRules.sequence(), strata);
 	}
 
-	public static StrataRule findStrataRule(SurfaceRules.RuleSource source) {
+	public static StrataRule findStrataRule(MaterialRule source) {
 		if (source == null) {
 			return null;
 		}
@@ -130,7 +111,7 @@ public class FastStrataSequenceRule implements SurfaceRules.SurfaceRule {
 		if (source instanceof AcquiredSurfaceRule acquired) {
 			return findStrataRule(acquired.root());
 		}
-		List<SurfaceRules.RuleSource> children = getChildren(source);
+		List<MaterialRule> children = getChildren(source);
 		if (children != null) {
 			for (int i = children.size() - 1; i >= 0; i--) {
 				StrataRule found = findStrataRule(children.get(i));
@@ -142,7 +123,7 @@ public class FastStrataSequenceRule implements SurfaceRules.SurfaceRule {
 		return null;
 	}
 
-	public static SurfaceRules.RuleSource removeStrataRule(SurfaceRules.RuleSource source, StrataRule target) {
+	public static MaterialRule removeStrataRule(MaterialRule source, StrataRule target) {
 		if (source == null || source == target || source.equals(target)) {
 			return null;
 		}
@@ -150,15 +131,15 @@ public class FastStrataSequenceRule implements SurfaceRules.SurfaceRule {
 			return source;
 		}
 		if (source instanceof AcquiredSurfaceRule acquired) {
-			SurfaceRules.RuleSource inner = removeStrataRule(acquired.root(), target);
+			MaterialRule inner = removeStrataRule(acquired.root(), target);
 			return inner != null ? new AcquiredSurfaceRule(inner, acquired.sources(), acquired.failures()) : null;
 		}
-		List<SurfaceRules.RuleSource> children = getChildren(source);
+		List<MaterialRule> children = getChildren(source);
 		if (children != null) {
-			List<SurfaceRules.RuleSource> filtered = new ArrayList<>(children.size());
+			List<MaterialRule> filtered = new ArrayList<>(children.size());
 			boolean changed = false;
-			for (SurfaceRules.RuleSource child : children) {
-				SurfaceRules.RuleSource updated = removeStrataRule(child, target);
+			for (MaterialRule child : children) {
+				MaterialRule updated = removeStrataRule(child, target);
 				if (updated != child) {
 					changed = true;
 				}
@@ -173,19 +154,18 @@ public class FastStrataSequenceRule implements SurfaceRules.SurfaceRule {
 				if (filtered.size() == 1) {
 					return filtered.get(0);
 				}
-				return SurfaceRules.sequence(filtered.toArray(new SurfaceRules.RuleSource[0]));
+				return MaterialRules.sequence(filtered.toArray(new MaterialRule[0]));
 			}
 		}
 		return source;
 	}
 
 	@SuppressWarnings("unchecked")
-	public static List<SurfaceRules.RuleSource> getChildren(SurfaceRules.RuleSource source) {
+	public static List<MaterialRule> getChildren(MaterialRule source) {
 		if (source == null || source instanceof StrataRule) {
 			return null;
 		}
 		Class<?> clazz = source.getClass();
-		// 1. If it's a java.lang.Record (SequenceRuleSource is a Record)
 		if (clazz.isRecord()) {
 			for (RecordComponent rc : clazz.getRecordComponents()) {
 				if (List.class.isAssignableFrom(rc.getType())) {
@@ -194,29 +174,27 @@ public class FastStrataSequenceRule implements SurfaceRules.SurfaceRule {
 						accessor.setAccessible(true);
 						Object val = accessor.invoke(source);
 						if (val instanceof List<?> l && isRuleSourceList(rc.getGenericType(), l)) {
-							return (List<SurfaceRules.RuleSource>) l;
+							return (List<MaterialRule>) l;
 						}
 					} catch (Throwable ignored) {}
 				}
 			}
 		}
-		// 2. Try method "sequence()"
 		try {
 			Method m = clazz.getMethod("sequence");
 			m.setAccessible(true);
 			Object val = m.invoke(source);
 			if (val instanceof List<?> l && isRuleSourceList(m.getGenericReturnType(), l)) {
-				return (List<SurfaceRules.RuleSource>) l;
+				return (List<MaterialRule>) l;
 			}
 		} catch (Throwable ignored) {}
-		// 3. Try declared field "sequence" or any List field
 		for (Field f : clazz.getDeclaredFields()) {
 			if (List.class.isAssignableFrom(f.getType())) {
 				try {
 					f.setAccessible(true);
 					Object val = f.get(source);
 					if (val instanceof List<?> l && isRuleSourceList(f.getGenericType(), l)) {
-						return (List<SurfaceRules.RuleSource>) l;
+						return (List<MaterialRule>) l;
 					}
 				} catch (Throwable ignored) {}
 			}
@@ -228,30 +206,30 @@ public class FastStrataSequenceRule implements SurfaceRules.SurfaceRule {
 		if (genericType instanceof ParameterizedType pt) {
 			Type[] args = pt.getActualTypeArguments();
 			if (args.length == 1 && args[0] instanceof Class<?> elemClass) {
-				return SurfaceRules.RuleSource.class.isAssignableFrom(elemClass);
+				return MaterialRule.class.isAssignableFrom(elemClass);
 			}
 		}
 		if (list.isEmpty()) {
 			return false;
 		}
 		for (Object elem : list) {
-			if (!(elem instanceof SurfaceRules.RuleSource)) {
+			if (!(elem instanceof MaterialRule)) {
 				return false;
 			}
 		}
 		return true;
 	}
 
-	public record Source(SurfaceRules.RuleSource base, @Nullable StrataRule strata) implements SurfaceRules.RuleSource {
+	public record Source(MaterialRule base, @Nullable StrataRule strata) implements MaterialRule {
 		@Override
-		public SurfaceRules.SurfaceRule apply(SurfaceRules.Context context) {
-			SurfaceRules.SurfaceRule baseRule = this.base.apply(context);
-			SurfaceRules.SurfaceRule strataRule = this.strata != null ? this.strata.apply(context) : null;
+		public RuleEvaluator compile(MaterialRuleContext context) {
+			RuleEvaluator baseRule = this.base.compile(context);
+			RuleEvaluator strataRule = this.strata != null ? this.strata.compile(context) : null;
 			return new FastStrataSequenceRule(context, baseRule, strataRule);
 		}
 
 		@Override
-		public net.minecraft.util.KeyDispatchDataCodec<? extends SurfaceRules.RuleSource> codec() {
+		public MapCodec<? extends MaterialRule> codec() {
 			return this.base.codec();
 		}
 	}

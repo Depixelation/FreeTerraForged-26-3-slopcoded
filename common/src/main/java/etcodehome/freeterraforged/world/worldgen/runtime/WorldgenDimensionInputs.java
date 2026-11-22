@@ -70,13 +70,13 @@ public final class WorldgenDimensionInputs {
 		MappedRegistry<LevelStem> resolved = new MappedRegistry<>(
 			Registries.LEVEL_STEM, declarations.registryLifecycle()
 		);
-		declarations.holders().forEach(holder -> resolved.register(
+		declarations.listElements().forEach(holder -> resolved.register(
 			holder.key(), replacements.getOrDefault(holder.key(), holder.value()),
 			declarations.registrationInfo(holder.key()).orElseThrow()
 		));
 		Map<TagKey<LevelStem>, List<Holder<LevelStem>>> tags = new LinkedHashMap<>();
-		declarations.getTags().forEach(pair -> tags.put(pair.getFirst(), pair.getSecond().stream()
-			.<Holder<LevelStem>>map(holder -> resolved.getHolderOrThrow(holder.unwrapKey().orElseThrow()))
+		declarations.getTags().forEach(named -> tags.put(named.key(), named.stream()
+			.<Holder<LevelStem>>map(holder -> resolved.getOrThrow(holder.unwrapKey().orElseThrow()))
 			.toList()));
 		resolved.bindTags(tags);
 		return resolved.freeze();

@@ -3,21 +3,21 @@ package etcodehome.freeterraforged.world.worldgen.runtime;
 import java.util.Objects;
 import java.util.Optional;
 
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 
 public final class PreviewSourceNegotiationException extends IllegalStateException {
-	private final Optional<ResourceLocation> provider;
+	private final Optional<Identifier> provider;
 	private final CapabilityFailure failure;
 
 	public PreviewSourceNegotiationException(
-		Optional<ResourceLocation> provider,
+		Optional<Identifier> provider,
 		CapabilityFailure failure
 	) {
 		this(provider, failure, null);
 	}
 
 	public PreviewSourceNegotiationException(
-		Optional<ResourceLocation> provider,
+		Optional<Identifier> provider,
 		CapabilityFailure failure,
 		Throwable cause
 	) {
@@ -26,7 +26,7 @@ public final class PreviewSourceNegotiationException extends IllegalStateExcepti
 		this.failure = Objects.requireNonNull(failure, "failure");
 	}
 
-	public Optional<ResourceLocation> provider() {
+	public Optional<Identifier> provider() {
 		return this.provider;
 	}
 

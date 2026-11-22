@@ -3,8 +3,8 @@ package etcodehome.freeterraforged.data.worldgen.preset;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.Preset;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.TerrainSettings;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.WorldSettings;
-import net.minecraft.world.level.levelgen.DensityFunction;
-import net.minecraft.world.level.levelgen.DensityFunctions;
+import net.minecraft.world.level.levelgen.densityfunction.DensityFunction;
+import net.minecraft.world.level.levelgen.densityfunction.DensityFunctions;
 
 public class PresetTerrainProvider {
 
@@ -18,6 +18,6 @@ public class PresetTerrainProvider {
 //		return LinearSplineFunction.builder(ridge)
 //			.addPoint(-1.0D, -0.4D)
 //			.build();
-		return DensityFunctions.constant(0.0D);
+		return DensityFunctions.constant(0.0F);
 	}
 }

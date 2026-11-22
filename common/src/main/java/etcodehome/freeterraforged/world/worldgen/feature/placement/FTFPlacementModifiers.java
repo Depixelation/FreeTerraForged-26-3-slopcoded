@@ -9,12 +9,11 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.level.dimension.LevelStem;
 import net.minecraft.world.level.levelgen.placement.PlacementModifier;
-import net.minecraft.world.level.levelgen.placement.PlacementModifierType;
 
 public class FTFPlacementModifiers {
-	public static final PlacementModifierType<BlacklistDimensionFilter> BLACKLIST_DIMENSION = register("blacklist_dimension", BlacklistDimensionFilter.CODEC);
-	public static final PlacementModifierType<FastPoissonModifier> FAST_POISSON = register("fast_poission", FastPoissonModifier.CODEC);
-	public static final PlacementModifierType<LegacyCountExtraModifier> LEGACY_COUNT_EXTRA = register("legacy_count_extra", LegacyCountExtraModifier.CODEC);
+	public static final MapCodec<BlacklistDimensionFilter> BLACKLIST_DIMENSION = register("blacklist_dimension", BlacklistDimensionFilter.CODEC);
+	public static final MapCodec<FastPoissonModifier> FAST_POISSON = register("fast_poission", FastPoissonModifier.CODEC);
+	public static final MapCodec<LegacyCountExtraModifier> LEGACY_COUNT_EXTRA = register("legacy_count_extra", LegacyCountExtraModifier.CODEC);
 
     public static void bootstrap() {
     }
@@ -44,9 +43,8 @@ public class FTFPlacementModifiers {
         return new LegacyCountExtraModifier(count, extraChance, extraCount);
     }
     
-    private static <P extends PlacementModifier> PlacementModifierType<P> register(String name, MapCodec<P> codec) {
-    	PlacementModifierType<P> type = () -> codec;
-		RegistryUtil.register(BuiltInRegistries.PLACEMENT_MODIFIER_TYPE, name, type);
-		return type;
+    private static <P extends PlacementModifier> MapCodec<P> register(String name, MapCodec<P> codec) {
+		RegistryUtil.register(BuiltInRegistries.PLACEMENT_MODIFIER_TYPE, name, codec);
+		return codec;
     }
 }

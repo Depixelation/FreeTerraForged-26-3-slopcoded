@@ -47,7 +47,7 @@ public class CaveSettings {
 
 	public static CaveSettings makeDefault(){
 		return new CaveSettings(
-			0.199F,
+			0.0F,
 			1.5625F,
 			1.0F,
 			1.0F,

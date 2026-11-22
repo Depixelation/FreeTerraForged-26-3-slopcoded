@@ -6,7 +6,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.levelgen.placement.PlacedFeature;
 import net.minecraft.world.level.levelgen.placement.PlacementContext;
-import net.minecraft.world.level.levelgen.placement.RandomOffsetPlacement;
+import net.minecraft.world.level.levelgen.placement.OffsetPlacement;
 import etcodehome.freeterraforged.world.worldgen.feature.placement.ChunkLocalPlacementClassifier.ChunkConfinement;
 import etcodehome.freeterraforged.world.worldgen.runtime.TerraForgedChunkGenerator;
 import etcodehome.freeterraforged.world.worldgen.runtime.WorldgenPlan;
@@ -53,7 +53,7 @@ public final class ChunkLocalFeaturePlacement {
 	}
 
 	public static Stream<BlockPos> constrain(
-		RandomOffsetPlacement placement,
+		OffsetPlacement placement,
 		Stream<BlockPos> positions
 	) {
 		State state = ACTIVE.get();

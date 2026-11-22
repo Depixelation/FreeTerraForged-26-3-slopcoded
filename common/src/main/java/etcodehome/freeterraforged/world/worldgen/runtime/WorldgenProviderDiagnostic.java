@@ -3,11 +3,11 @@ package etcodehome.freeterraforged.world.worldgen.runtime;
 import java.util.Objects;
 import java.util.Optional;
 
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 
 public record WorldgenProviderDiagnostic(
 	String source,
-	Optional<ResourceLocation> provider,
+	Optional<Identifier> provider,
 	Optional<WorldgenFacet> facet,
 	CapabilityFailure failure
 ) {

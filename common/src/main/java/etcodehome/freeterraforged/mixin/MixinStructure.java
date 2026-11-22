@@ -1,18 +1,14 @@
 package etcodehome.freeterraforged.mixin;
 
-import etcodehome.freeterraforged.registries.FTFRegistries;
-import etcodehome.freeterraforged.world.worldgen.structure.rule.StructureRule;
+import etcodehome.freeterraforged.world.worldgen.runtime.TerraForgedChunkGenerator;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import net.minecraft.world.level.levelgen.structure.Structure;
-import net.minecraft.world.level.levelgen.structure.Structure.GenerationContext;
-import net.minecraft.world.level.levelgen.structure.Structure.GenerationStub;
-import etcodehome.freeterraforged.world.worldgen.runtime.TerraForgedChunkGenerator;
 
-@Mixin(Structure.class)
+@Mixin(Structure.GenerationContext.class)
 public class MixinStructure {
 
 	@Inject(
@@ -20,7 +16,8 @@ public class MixinStructure {
 		method = "isValidBiome",
 		cancellable = true
 	)
-	private static void isValidBiome(GenerationStub generationStub, GenerationContext generationContext, CallbackInfoReturnable<Boolean> callback) {
+	private void isValidBiome(Structure.GenerationStub generationStub, CallbackInfoReturnable<Boolean> callback) {
+		Structure.GenerationContext generationContext = (Structure.GenerationContext) (Object) this;
 		if (!(generationContext.chunkGenerator() instanceof TerraForgedChunkGenerator generator)) {
 			return;
 		}

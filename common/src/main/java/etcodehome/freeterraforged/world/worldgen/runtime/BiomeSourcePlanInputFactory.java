@@ -1,9 +1,9 @@
 package etcodehome.freeterraforged.world.worldgen.runtime;
 
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 
 public interface BiomeSourcePlanInputFactory {
-	ResourceLocation biomeSourcePlanFactoryId();
+	Identifier biomeSourcePlanFactoryId();
 
 	BiomeSourcePlanInput createBiomeSourcePlanInput(WorldgenOwner owner);
 }

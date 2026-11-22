@@ -1,30 +1,28 @@
 package etcodehome.freeterraforged.world.worldgen.feature;
 
+import com.mojang.serialization.MapCodec;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.level.levelgen.feature.Feature;
-import net.minecraft.world.level.levelgen.feature.configurations.DiskConfiguration;
-import net.minecraft.world.level.levelgen.feature.configurations.FeatureConfiguration;
-import net.minecraft.world.level.levelgen.feature.configurations.NoneFeatureConfiguration;
 import etcodehome.freeterraforged.platform.RegistryUtil;
 import etcodehome.freeterraforged.world.worldgen.feature.chance.ChanceFeature;
 import etcodehome.freeterraforged.world.worldgen.feature.template.TemplateFeature;
 
 public class FTFFeatures {
-	public static final Feature<TemplateFeature.Config<?>> TEMPLATE = register("template", new TemplateFeature(TemplateFeature.Config.CODEC));
-	public static final Feature<BushFeature.Config> BUSH = register("bush", new BushFeature(BushFeature.Config.CODEC));
-	public static final Feature<DiskConfiguration> DISK = register("disk", new DiskFeature(DiskConfiguration.CODEC));
-	public static final Feature<ChanceFeature.Config> CHANCE = register("chance", new ChanceFeature(ChanceFeature.Config.CODEC));
-	public static final Feature<ScreeFeature.Config> ERODE = register("erode", new ScreeFeature(ScreeFeature.Config.CODEC));
-	public static final Feature<DecorateSnowFeature.Config> DECORATE_SNOW = register("decorate_snow", new DecorateSnowFeature(DecorateSnowFeature.Config.CODEC));
-	public static final Feature<SwampSurfaceFeature.Config> SWAMP_SURFACE = register("swamp_surface", new SwampSurfaceFeature(SwampSurfaceFeature.Config.CODEC));
-	public static final Feature<NoneFeatureConfiguration> RIVER_GASKET = register("river_gasket", new RiverGasketFeature(NoneFeatureConfiguration.CODEC));
+	public static final MapCodec<TemplateFeature> TEMPLATE = register("template", TemplateFeature.CODEC);
+	public static final MapCodec<BushFeature> BUSH = register("bush", BushFeature.CODEC);
+	public static final MapCodec<DiskFeature> DISK = register("disk", DiskFeature.CODEC);
+	public static final MapCodec<ChanceFeature> CHANCE = register("chance", ChanceFeature.CODEC);
+	public static final MapCodec<ScreeFeature> ERODE = register("erode", ScreeFeature.CODEC);
+	public static final MapCodec<DecorateSnowFeature> DECORATE_SNOW = register("decorate_snow", DecorateSnowFeature.CODEC);
+	public static final MapCodec<SwampSurfaceFeature> SWAMP_SURFACE = register("swamp_surface", SwampSurfaceFeature.CODEC);
+	public static final MapCodec<RiverGasketFeature> RIVER_GASKET = register("river_gasket", RiverGasketFeature.CODEC);
 
 	public static void bootstrap() {
 
 	}
 
-	private static <T extends FeatureConfiguration> Feature<T> register(String name, Feature<T> feature) {
-		RegistryUtil.register(BuiltInRegistries.FEATURE, name, feature);
-		return feature;
+	private static <T extends Feature> MapCodec<T> register(String name, MapCodec<T> codec) {
+		RegistryUtil.register(BuiltInRegistries.FEATURE_TYPE, name, codec);
+		return codec;
 	}
 }

@@ -4,12 +4,12 @@ import java.awt.Color;
 import java.util.Map;
 
 import net.minecraft.core.Holder;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.tags.BiomeTags;
 import net.minecraft.world.level.biome.Biome;
 
 final class BiomePreviewColors {
-    private static final Map<ResourceLocation, Integer> OVERRIDES = Map.ofEntries(
+    private static final Map<Identifier, Integer> OVERRIDES = Map.ofEntries(
             // --- Plains & Fields ---
             entry("plains", 0x86B14B),                // Balanced Grass Green
             entry("sunflower_plains", 0x96D847),      // Balanced Spring Green
@@ -25,6 +25,7 @@ final class BiomePreviewColors {
             entry("old_growth_birch_forest", 0x649A42),// Mid Birch Olive
             entry("dark_forest", 0x618A4D),           // Soft Canopy Olive-Sage
             entry("pale_garden", 0xBBBDAE),           // Muted Slate Ash
+            entry("dappled_forest", 0xD67835),        // Warm Autumn Amber / Poplar Gold
             entry("taiga", 0x508A6B),                 // Mid-Vibrance Spruce Sage
             entry("snowy_taiga", 0x94CDC4),           // Soft Frost Teal
             entry("old_growth_pine_taiga", 0x737343), // Balanced Podzol Olive
@@ -88,7 +89,7 @@ final class BiomePreviewColors {
     private BiomePreviewColors() {
     }
 
-    static int color(ResourceLocation id) {
+    static int color(Identifier id) {
         Integer override = OVERRIDES.get(id);
         if (override != null) {
             return toNativeColor(override);
@@ -101,7 +102,7 @@ final class BiomePreviewColors {
         return toNativeColor(Color.HSBtoRGB(hue, saturation, brightness));
     }
 
-    static int color(Holder<Biome> biome, ResourceLocation id) {
+    static int color(Holder<Biome> biome, Identifier id) {
         Integer override = OVERRIDES.get(id);
         if (override != null) {
             return toNativeColor(override);
@@ -109,8 +110,8 @@ final class BiomePreviewColors {
         if (biome.is(BiomeTags.IS_OCEAN) || biome.is(BiomeTags.IS_RIVER)) {
             return toNativeColor(biome.value().getWaterColor());
         }
-        return biome.value().getSpecialEffects().getGrassColorOverride()
-            .or(() -> biome.value().getSpecialEffects().getFoliageColorOverride())
+        return biome.value().getSpecialEffects().grassColorOverride()
+            .or(() -> biome.value().getSpecialEffects().foliageColorOverride())
             .map(BiomePreviewColors::toNativeColor)
             .orElseGet(() -> color(id));
     }
@@ -137,8 +138,8 @@ final class BiomePreviewColors {
             | mixedThird << 16;
     }
 
-    private static Map.Entry<ResourceLocation, Integer> entry(String path, int rgb) {
-        return Map.entry(ResourceLocation.withDefaultNamespace(path), rgb);
+    private static Map.Entry<Identifier, Integer> entry(String path, int rgb) {
+        return Map.entry(Identifier.withDefaultNamespace(path), rgb);
     }
 
     private static int mix(int value) {

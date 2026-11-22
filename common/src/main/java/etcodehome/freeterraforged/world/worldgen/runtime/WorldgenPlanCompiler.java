@@ -14,7 +14,7 @@ import java.util.Set;
 import java.util.concurrent.CancellationException;
 import java.util.function.BooleanSupplier;
 
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import etcodehome.freeterraforged.FTFCommon;
 
 public final class WorldgenPlanCompiler {
@@ -101,7 +101,7 @@ public final class WorldgenPlanCompiler {
 			? orderProviders(activeBindings.stream()
 				.map(WorldgenProviderCatalog.ProviderBinding::provider).toList())
 			: activeBindings.stream().map(WorldgenProviderCatalog.ProviderBinding::provider).toList();
-		Map<ResourceLocation, WorldgenProviderMetadata> metadataById = new HashMap<>();
+		Map<Identifier, WorldgenProviderMetadata> metadataById = new HashMap<>();
 		activeBindings.forEach(binding -> metadataById.put(binding.metadata().id(), binding.metadata()));
 		checkCancelled(cancelled);
 		WorldgenCompilationContext context = new WorldgenCompilationContext(
@@ -111,7 +111,7 @@ public final class WorldgenPlanCompiler {
 		for (WorldgenFacet facet : WorldgenFacet.values()) {
 			plans.put(facet, base.facet(facet));
 		}
-		EnumMap<WorldgenFacet, ResourceLocation> contributors = new EnumMap<>(WorldgenFacet.class);
+		EnumMap<WorldgenFacet, Identifier> contributors = new EnumMap<>(WorldgenFacet.class);
 		EnumMap<WorldgenFacet, List<PlanDescriptor>> contributionDescriptors =
 			new EnumMap<>(WorldgenFacet.class);
 		WorldgenExecution execution = base.execution();
@@ -305,7 +305,7 @@ public final class WorldgenPlanCompiler {
 							.add(contribution.descriptor());
 						continue;
 					}
-					ResourceLocation previous = contributors.putIfAbsent(facet, provider.id());
+					Identifier previous = contributors.putIfAbsent(facet, provider.id());
 					if (previous != null) {
 						CapabilityFailure failure = CapabilityFailure.unavailable(
 							"provider_conflict",
@@ -545,10 +545,10 @@ public final class WorldgenPlanCompiler {
 	private static List<WorldgenCapabilityProvider> orderProviders(
 		List<? extends WorldgenCapabilityProvider> input
 	) {
-		Map<ResourceLocation, WorldgenCapabilityProvider> providers = new HashMap<>();
+		Map<Identifier, WorldgenCapabilityProvider> providers = new HashMap<>();
 		for (WorldgenCapabilityProvider provider : List.copyOf(input)) {
 			Objects.requireNonNull(provider, "provider");
-			ResourceLocation id = Objects.requireNonNull(provider.id(), "provider id");
+			Identifier id = Objects.requireNonNull(provider.id(), "provider id");
 			Objects.requireNonNull(provider.facets(), "provider facets");
 			Objects.requireNonNull(provider.ownerTypes(), "provider ownerTypes");
 			if (provider.version() <= 0) {
@@ -563,8 +563,8 @@ public final class WorldgenPlanCompiler {
 			}
 		}
 
-		Map<ResourceLocation, Set<ResourceLocation>> outgoing = new HashMap<>();
-		Map<ResourceLocation, Integer> incoming = new HashMap<>();
+		Map<Identifier, Set<Identifier>> outgoing = new HashMap<>();
+		Map<Identifier, Integer> incoming = new HashMap<>();
 		providers.keySet().forEach(id -> {
 			outgoing.put(id, new HashSet<>());
 			incoming.put(id, 0);
@@ -585,7 +585,7 @@ public final class WorldgenPlanCompiler {
 			}
 		}
 
-		PriorityQueue<ResourceLocation> ready = new PriorityQueue<>(Comparator.comparing(ResourceLocation::toString));
+		PriorityQueue<Identifier> ready = new PriorityQueue<>(Comparator.comparing(Identifier::toString));
 		incoming.forEach((id, count) -> {
 			if (count == 0) {
 				ready.add(id);
@@ -593,9 +593,9 @@ public final class WorldgenPlanCompiler {
 		});
 		List<WorldgenCapabilityProvider> ordered = new ArrayList<>();
 		while (!ready.isEmpty()) {
-			ResourceLocation id = ready.remove();
+			Identifier id = ready.remove();
 			ordered.add(providers.get(id));
-			outgoing.get(id).stream().sorted(Comparator.comparing(ResourceLocation::toString)).forEach(next -> {
+			outgoing.get(id).stream().sorted(Comparator.comparing(Identifier::toString)).forEach(next -> {
 				int count = incoming.compute(next, (ignored, value) -> value - 1);
 				if (count == 0) {
 					ready.add(next);
@@ -615,7 +615,7 @@ public final class WorldgenPlanCompiler {
 
 	private static WorldgenPlans.DomainPlan unavailable(
 		WorldgenPlans.DomainPlan previous,
-		ResourceLocation provider,
+		Identifier provider,
 		CapabilityFailure failure
 	) {
 		PlanDescriptor descriptor = new PlanDescriptor(

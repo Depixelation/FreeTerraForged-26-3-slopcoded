@@ -14,7 +14,7 @@ import com.mojang.datafixers.util.Pair;
 
 import net.minecraft.core.Holder;
 import net.minecraft.core.QuartPos;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.biome.BiomeSource;
@@ -43,12 +43,12 @@ import etcodehome.freeterraforged.world.worldgen.runtime.WorldgenPlans;
 import etcodehome.freeterraforged.world.worldgen.runtime.WorldgenQueryMode;
 
 public final class LithostitchedCapabilityProvider implements WorldgenCapabilityProvider {
-	private static final ResourceLocation ID = FTFCommon.location("lithostitched_injectors");
-	private static final ResourceLocation BIOLITH = FTFCommon.location("biolith_placements");
+	private static final Identifier ID = FTFCommon.location("lithostitched_injectors");
+	private static final Identifier BIOLITH = FTFCommon.location("biolith_placements");
 	private static final long REGION_SALT = 0x61C8E4A2793DB50FL;
 
 	@Override
-	public ResourceLocation id() {
+	public Identifier id() {
 		return ID;
 	}
 
@@ -333,7 +333,7 @@ public final class LithostitchedCapabilityProvider implements WorldgenCapability
 		}
 		FTFCommon.LOGGER.info(
 			"Suppressed {} Biome Replacer Lithostitched injector(s) from FTF-owned dimension {}; native biome replacement remains the sole FTF authority",
-			suppressed, dimension.location()
+			suppressed, dimension.identifier()
 		);
 		return new LithostitchedInjectionBridge.Snapshot(
 			snapshot.mechanismVersion(), snapshot.seed(), snapshot.baseRoot(), retained,
@@ -399,7 +399,7 @@ public final class LithostitchedCapabilityProvider implements WorldgenCapability
 				new Climate.ParameterList<>(injector.points())
 			))
 			.toList();
-		Map<Holder<Biome>, CellRendezvous.Selector<ResourceLocation>> regionSelectors =
+		Map<Holder<Biome>, CellRendezvous.Selector<Identifier>> regionSelectors =
 			compileRegionSelectors(snapshot.regions(), seed);
 		List<LithostitchedInjectionBridge.CapturedInjector> partials = ordered(
 			snapshot, LithostitchedInjectionBridge.Kind.REPLACE_PARTIALLY
@@ -427,7 +427,7 @@ public final class LithostitchedCapabilityProvider implements WorldgenCapability
 				200,
 				(selection, spatial, target, quartX, quartY, quartZ, sampler, surfaceContext) -> {
 					Holder<Biome> biome = selection.biome();
-					ResourceLocation region = selectRegion(
+					Identifier region = selectRegion(
 						regionSelectors, snapshot.nativeRegionFunctionPresent(), biome,
 						spatial.cellX(), spatial.cellZ()
 					);
@@ -486,16 +486,16 @@ public final class LithostitchedCapabilityProvider implements WorldgenCapability
 			.thenComparing(LithostitchedInjectionBridge.CapturedInjector::id);
 	}
 
-	private static Map<Holder<Biome>, CellRendezvous.Selector<ResourceLocation>> compileRegionSelectors(
+	private static Map<Holder<Biome>, CellRendezvous.Selector<Identifier>> compileRegionSelectors(
 		List<LithostitchedInjectionBridge.CapturedRegion> regions,
 		long seed
 	) {
-		Map<Holder<Biome>, List<CellRendezvous.Choice<ResourceLocation>>> choices = new java.util.HashMap<>();
+		Map<Holder<Biome>, List<CellRendezvous.Choice<Identifier>>> choices = new java.util.HashMap<>();
 		for (LithostitchedInjectionBridge.CapturedRegion region : regions) {
 			if (region.weight() <= 0) {
 				continue;
 			}
-			CellRendezvous.Choice<ResourceLocation> choice = new CellRendezvous.Choice<>(
+			CellRendezvous.Choice<Identifier> choice = new CellRendezvous.Choice<>(
 				region.id(), region.weight(), region.id()
 			);
 			for (Holder<Biome> biome : region.biomes()) {
@@ -508,8 +508,8 @@ public final class LithostitchedCapabilityProvider implements WorldgenCapability
 		));
 	}
 
-	private static ResourceLocation selectRegion(
-		Map<Holder<Biome>, CellRendezvous.Selector<ResourceLocation>> selectors,
+	private static Identifier selectRegion(
+		Map<Holder<Biome>, CellRendezvous.Selector<Identifier>> selectors,
 		boolean enabled,
 		Holder<Biome> biome,
 		long cellX,
@@ -518,7 +518,7 @@ public final class LithostitchedCapabilityProvider implements WorldgenCapability
 		if (!enabled) {
 			return LithostitchedInjectionBridge.noRegion();
 		}
-		CellRendezvous.Selector<ResourceLocation> selector = selectors.get(biome);
+		CellRendezvous.Selector<Identifier> selector = selectors.get(biome);
 		return selector == null
 			? LithostitchedInjectionBridge.noRegion()
 			: selector.select(cellX, cellZ);

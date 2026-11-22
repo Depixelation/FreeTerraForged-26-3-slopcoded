@@ -31,6 +31,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 
+import etcodehome.freeterraforged.FTFCommon;
 import etcodehome.freeterraforged.world.worldgen.feature.template.placement.TemplatePlacement;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -269,13 +270,13 @@ public class FeatureTemplate {
         BlockState state2 = world.getBlockState(pos2);
 
         // update state at pos1 - the input position
-        BlockState result1 = state1.updateShape(direction, state2, world, pos1, pos2);
+        BlockState result1 = state1.updateShape(world, world, pos1, direction, pos2, state2, world.getRandom());
         if (result1 != state1) {
         	setter.setBlock(pos1, result1, PASTE_FLAG);
         }
 
         // update state at pos2 - the neighbour
-        BlockState result2 = state2.updateShape(direction.getOpposite(), result1, world, pos2, pos1);
+        BlockState result2 = state2.updateShape(world, world, pos2, direction.getOpposite(), pos1, result1, world.getRandom());
         if (result2 != state2) {
         	setter.setBlock(pos2, result2, PASTE_FLAG);
         }
@@ -307,8 +308,8 @@ public class FeatureTemplate {
             if (!root.contains("palette") || !root.contains("blocks")) {
                 return Optional.empty();
             }
-            BlockState[] palette = readPalette(root.getList("palette", 10));
-            BlockInfo[] blockInfos = readBlocks(root.getList("blocks", 10), palette);
+            BlockState[] palette = readPalette(root.getListOrEmpty("palette"));
+            BlockInfo[] blockInfos = readBlocks(root.getListOrEmpty("blocks"), palette);
             List<BlockInfo> blocks = relativize(blockInfos);
             return Optional.of(new FeatureTemplate(blocks));
         } catch (IOException e) {
@@ -321,8 +322,18 @@ public class FeatureTemplate {
         BlockState[] palette = new BlockState[list.size()];
         for (int i = 0; i < list.size(); i++) {
             try {
-                palette[i] = NbtUtils.readBlockState(BuiltInRegistries.BLOCK.asLookup(), list.getCompound(i));
+                CompoundTag tag = list.getCompoundOrEmpty(i);
+                if (!tag.contains("id") && tag.contains("Name")) {
+                    CompoundTag converted = tag.copy();
+                    converted.putString("id", tag.getStringOr("Name", ""));
+                    if (!converted.contains("properties") && tag.contains("Properties")) {
+                        converted.put("properties", tag.getCompoundOrEmpty("Properties"));
+                    }
+                    tag = converted;
+                }
+                palette[i] = NbtUtils.readBlockState(BuiltInRegistries.BLOCK, tag);
             } catch (Throwable t) {
+                FTFCommon.LOGGER.warn("Failed to read block state in template palette at index " + i + ": " + t.getMessage(), t);
                 palette[i] = Blocks.AIR.defaultBlockState();
             }
         }
@@ -332,9 +343,9 @@ public class FeatureTemplate {
     private static BlockInfo[] readBlocks(ListTag list, BlockState[] palette) {
         BlockInfo[] blocks = new BlockInfo[list.size()];
         for (int i = 0; i < list.size(); i++) {
-            CompoundTag compound = list.getCompound(i);
-            BlockState state = palette[compound.getInt("state")];
-            BlockPos pos = readPos(compound.getList("pos", 3));
+            CompoundTag compound = list.getCompoundOrEmpty(i);
+            BlockState state = palette[compound.getIntOr("state", 0)];
+            BlockPos pos = readPos(compound.getListOrEmpty("pos"));
             blocks[i] = new BlockInfo(pos, state);
         }
         return blocks;
@@ -382,9 +393,9 @@ public class FeatureTemplate {
     }
 
     private static BlockPos readPos(ListTag list) {
-        int x = list.getInt(0);
-        int y = list.getInt(1);
-        int z = list.getInt(2);
+        int x = list.getIntOr(0, 0);
+        int y = list.getIntOr(1, 0);
+        int z = list.getIntOr(2, 0);
         return new BlockPos(x, y, z);
     }
 

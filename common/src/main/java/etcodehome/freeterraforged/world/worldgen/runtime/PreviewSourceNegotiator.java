@@ -5,7 +5,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.CancellationException;
 
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.biome.BiomeSource;
 import net.minecraft.world.level.biome.Climate;
 import net.minecraft.world.level.biome.MultiNoiseBiomeSource;
@@ -154,7 +154,7 @@ public final class PreviewSourceNegotiator {
 
 	private static void validateCompleteFactoryResult(
 		RequestOwnedBiomeSource owned,
-		ResourceLocation factory
+		Identifier factory
 	) {
 		if (owned.source() instanceof MultiNoiseBiomeSource || owned.planInput().isPresent()) {
 			return;
@@ -176,7 +176,7 @@ public final class PreviewSourceNegotiator {
 	private static void validateFresh(
 		BiomeSource realized,
 		RequestOwnedBiomeSource owned,
-		ResourceLocation factory
+		Identifier factory
 	) {
 		if (owned.source() == realized) {
 			PreviewSourceNegotiationException failure = failure(
@@ -193,7 +193,7 @@ public final class PreviewSourceNegotiator {
 	}
 
 	private static PreviewSourceNegotiationException providerFailure(
-		ResourceLocation provider,
+		Identifier provider,
 		Throwable cause
 	) {
 		return failure(
@@ -203,7 +203,7 @@ public final class PreviewSourceNegotiator {
 	}
 
 	private static PreviewSourceNegotiationException failure(
-		ResourceLocation provider,
+		Identifier provider,
 		String code,
 		String message,
 		Throwable cause
@@ -244,7 +244,7 @@ public final class PreviewSourceNegotiator {
 
 	public record Result(
 		RequestOwnedBiomeSource owned,
-		Optional<ResourceLocation> provider
+		Optional<Identifier> provider
 	) {
 		public Result {
 			owned = Objects.requireNonNull(owned, "owned");

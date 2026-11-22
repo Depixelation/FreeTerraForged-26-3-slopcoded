@@ -106,7 +106,7 @@ public class MixinOceanMonumentBuilding implements OceanMonumentBuildingFix {
 		// getFirstOccupiedHeight samples density functions directly, avoiding the chunk-loaded-radius
 		// bound that level.getHeight() would hit sampling this far across the monument's footprint.
 		RandomState randomState = level.getLevel().getChunkSource().randomState();
-		int highest = level.getMinBuildHeight();
+		int highest = level.getMinY();
 		for (int ix = 0; ix <= ftf$FOOTPRINT_SAMPLE_STEPS; ix++) {
 			int x = ftf$sampleCoord(box.minX(), box.maxX(), ix);
 			for (int iz = 0; iz <= ftf$FOOTPRINT_SAMPLE_STEPS; iz++) {

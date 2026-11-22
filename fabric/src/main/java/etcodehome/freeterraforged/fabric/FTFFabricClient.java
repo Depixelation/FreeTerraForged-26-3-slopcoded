@@ -1,8 +1,7 @@
 package etcodehome.freeterraforged.fabric;
 
 import net.fabricmc.api.ClientModInitializer;
-import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
-import net.minecraft.client.Minecraft;
+import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderEvents;
 import etcodehome.freeterraforged.client.debug.FlowFieldDebugRenderer;
 import etcodehome.freeterraforged.fabric.network.FTFFabricClientNetworking;
 
@@ -12,12 +11,11 @@ public class FTFFabricClient implements ClientModInitializer {
     public void onInitializeClient() {
         FTFFabricClientNetworking.init();
 
-        Minecraft mc = Minecraft.getInstance();
-        WorldRenderEvents.AFTER_TRANSLUCENT.register(context -> {
+        LevelRenderEvents.AFTER_TRANSLUCENT_TERRAIN.register(context -> {
             FlowFieldDebugRenderer.render(
-                    context.matrixStack(),
-                    context.camera(),
-                    mc.renderBuffers().bufferSource()
+                    context.poseStack(),
+                    context.gameRenderer().mainCamera(),
+                    context.submitNodeCollector()
             );
         });
     }

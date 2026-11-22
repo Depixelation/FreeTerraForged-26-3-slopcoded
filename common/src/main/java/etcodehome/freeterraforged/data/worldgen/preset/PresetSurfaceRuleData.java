@@ -9,24 +9,25 @@ import etcodehome.freeterraforged.world.worldgen.surface.rule.FTFSurfaceRules;
 import etcodehome.freeterraforged.world.worldgen.surface.rule.StrataRule;
 import net.minecraft.core.Holder;
 import net.minecraft.core.HolderGetter;
-import net.minecraft.data.worldgen.SurfaceRuleData;
-import net.minecraft.world.level.levelgen.DensityFunction;
-import net.minecraft.world.level.levelgen.SurfaceRules;
+import net.minecraft.data.worldgen.material.OverworldMaterialRules;
+import net.minecraft.world.level.levelgen.material.MaterialRules;
+import net.minecraft.world.level.levelgen.material.rule.MaterialRule;
 import etcodehome.freeterraforged.FTFCommon;
 import etcodehome.freeterraforged.world.worldgen.noise.module.Noise;
 
 public class PresetSurfaceRuleData {
     
-    public static SurfaceRules.RuleSource overworld(Preset preset, HolderGetter<DensityFunction> densityFunctions, HolderGetter<Noise> noise) {
-		var base = new etcodehome.freeterraforged.world.worldgen.surface.rule.InheritedSurfaceRule(SurfaceRuleData.overworld(),
+    public static MaterialRule overworld(Preset preset, HolderGetter<MaterialRule> materialRules, HolderGetter<Noise> noise) {
+		MaterialRule overworld = MaterialRules.getRule(materialRules, OverworldMaterialRules.OVERWORLD);
+		var base = new etcodehome.freeterraforged.world.worldgen.surface.rule.InheritedSurfaceRule(overworld,
 			etcodehome.freeterraforged.world.worldgen.surface.rule.InheritedSurfaceRule.BIOME_DOMAINS);
 		if (preset.miscellaneous().strataDecorator) {
-			return SurfaceRules.sequence(base, makeStrataRule(noise));
+			return MaterialRules.sequence(base, makeStrataRule(noise));
 		}
-		return SurfaceRules.sequence(base);
+		return MaterialRules.sequence(base);
     }
     
-	private static SurfaceRules.RuleSource makeStrataRule(HolderGetter<Noise> noise) {
+	private static MaterialRule makeStrataRule(HolderGetter<Noise> noise) {
 		Holder<Noise> depth = noise.getOrThrow(PresetStrataNoise.STRATA_DEPTH);
 
 		List<StrataRule.Strata> strata = new ArrayList<>();

@@ -15,7 +15,7 @@ import net.minecraft.core.Registry;
 import net.minecraft.core.QuartPos;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceKey;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.tags.TagKey;
 import net.minecraft.util.Mth;
 import net.minecraft.world.level.biome.Biome;
@@ -30,9 +30,13 @@ final class BiolithCriterionBridge {
 	private BiolithCriterionBridge() {
 	}
 
+	private static Identifier getCriterionTypeId(Criterion criterion) {
+		return criterion.getType().getId();
+	}
+
 	static Snapshot capture(Criterion criterion) {
 		Objects.requireNonNull(criterion, "criterion");
-		ResourceLocation type = criterion.getType().getId();
+		Identifier type = getCriterionTypeId(criterion);
 		if (!type.getNamespace().equals("biolith") || !NORMALIZED_TYPES.contains(type.getPath())) {
 			return new Snapshot(
 				type, Optional.empty(), Optional.of(
@@ -56,7 +60,7 @@ final class BiolithCriterionBridge {
 	}
 
 	private static Node captureNode(JsonObject value) {
-		ResourceLocation type = ResourceLocation.parse(string(value, "type"));
+		Identifier type = Identifier.parse(string(value, "type"));
 		return switch (type.getNamespace().equals("biolith") ? type.getPath() : "") {
 			case "not" -> new Not(captureNode(object(required(value, "criterion"))));
 			case "all_of" -> new AllOf(required(value, "criteria").getAsJsonArray().asList().stream()
@@ -130,13 +134,13 @@ final class BiolithCriterionBridge {
 	private static BiomeTarget target(String encoded) {
 		return encoded.startsWith("#")
 			? new BiomeTarget(Optional.empty(), Optional.of(TagKey.create(
-				Registries.BIOME, ResourceLocation.parse(encoded.substring(1))
+				Registries.BIOME, Identifier.parse(encoded.substring(1))
 			)))
 			: new BiomeTarget(Optional.of(biomeKey(encoded)), Optional.empty());
 	}
 
 	private static ResourceKey<Biome> biomeKey(String encoded) {
-		return ResourceKey.create(Registries.BIOME, ResourceLocation.parse(encoded));
+		return ResourceKey.create(Registries.BIOME, Identifier.parse(encoded));
 	}
 
 	static boolean matches(Node node, Evaluation evaluation) {
@@ -330,7 +334,7 @@ final class BiolithCriterionBridge {
 	}
 
 	record Snapshot(
-		ResourceLocation type,
+		Identifier type,
 		Optional<Node> node,
 		Optional<String> failure
 	) {
@@ -515,7 +519,7 @@ final class BiolithCriterionBridge {
 			if (this.tag.isEmpty()) {
 				return this;
 			}
-			java.util.Set<ResourceKey<Biome>> keys = biomes.getTag(this.tag.orElseThrow())
+			java.util.Set<ResourceKey<Biome>> keys = biomes.get(this.tag.orElseThrow())
 				.stream()
 					.flatMap(set -> set.stream())
 					.map(holder -> holder.unwrapKey().orElseThrow(

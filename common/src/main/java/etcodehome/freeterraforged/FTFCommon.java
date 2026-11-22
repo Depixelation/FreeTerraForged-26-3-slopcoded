@@ -24,7 +24,7 @@ import etcodehome.freeterraforged.world.worldgen.biome.modifier.BiomeModifier;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import etcodehome.freeterraforged.world.worldgen.feature.chance.FTFChanceModifiers;
 import etcodehome.freeterraforged.world.worldgen.noise.module.Noise;
 
@@ -59,8 +59,8 @@ public class FTFCommon {
 		RegistryUtil.createDataRegistry(FTFRegistries.STRUCTURE_RULE, StructureRule.DIRECT_CODEC, false);
 	}
 
-	public static ResourceLocation location(String name) {
-		if (name.contains(":")) return ResourceLocation.parse(name);
-		return ResourceLocation.fromNamespaceAndPath(FTFCommon.MOD_ID, name);
+	public static Identifier location(String name) {
+		if (name.contains(":")) return Identifier.parse(name);
+		return Identifier.fromNamespaceAndPath(FTFCommon.MOD_ID, name);
 	}
 }

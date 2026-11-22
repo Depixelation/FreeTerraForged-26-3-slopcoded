@@ -2,20 +2,18 @@ package etcodehome.freeterraforged.world.worldgen.biome;
 
 import net.minecraft.world.level.biome.Climate;
 import etcodehome.freeterraforged.world.worldgen.runtime.OwnerThreadCache;
-import java.lang.ref.WeakReference;
 
 public final class ClimatePointCache {
 
-    private static final int SIZE = 1024; // Power of two for rapid bit-masking
-    private final OwnerThreadCache<Entry> values = new OwnerThreadCache<>(SIZE);
+    private static final int SIZE = 4096; // Power of two for rapid bit-masking
+    private final OwnerThreadCache<Climate.TargetPoint> values = new OwnerThreadCache<>(SIZE);
 
     /**
      * @return the cached climate point for this sampler, or null on a cache miss.
      */
     public Climate.TargetPoint find(final Object sampler, final int x, final int y, final int z) {
         final long key = key(x, y, z);
-		Entry entry = this.values.find(key);
-		return entry != null && entry.get() == sampler ? entry.target : null;
+        return this.values.get(key, sampler);
     }
 
     /**
@@ -26,7 +24,7 @@ public final class ClimatePointCache {
             return;
         }
         final long key = key(x, y, z);
-		this.values.store(key, new Entry(sampler, target));
+        this.values.store(key, sampler, target);
     }
 
 	public void clear() {
@@ -42,14 +40,5 @@ public final class ClimatePointCache {
     }
 
     public ClimatePointCache() {}
-
-	private static final class Entry extends WeakReference<Object> {
-		private final Climate.TargetPoint target;
-
-		private Entry(Object sampler, Climate.TargetPoint target) {
-			super(sampler);
-			this.target = target;
-		}
-	}
 
 }

@@ -31,6 +31,8 @@ final class PreviewState {
     Levels frameLevels;
     boolean generatedWithBiomePipeline;
     int centerX, centerZ;
+    int zoom = 1;
+    double zoomParam = 95.0D;
     int hoveredCoordX, hoveredCoordZ;
     String hoveredCoords = "";
 

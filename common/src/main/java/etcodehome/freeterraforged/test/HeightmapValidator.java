@@ -153,7 +153,7 @@ public final class HeightmapValidator {
 		}
 
 		// 2. Resolve spawn chunk bounds (spawn chunk +/- radius in chunks)
-		BlockPos spawnPos = level.getSharedSpawnPos();
+		BlockPos spawnPos = level.getRespawnData().pos();
 		int radiusChunks = Integer.getInteger("freeterraforged.test.heightmap.radius", DEFAULT_CHUNK_RADIUS);
 		int spawnChunkX = spawnPos.getX() >> 4;
 		int spawnChunkZ = spawnPos.getZ() >> 4;
@@ -176,10 +176,17 @@ public final class HeightmapValidator {
 		String spawnTerrainName = spawnCell.terrain.getName();
 		String spawnTerrainCategory = spawnCell.terrain.getCategory().name();
 		int spawnBlockY = ctx.levels.scale(spawnCell.height);
+		int liveGenBaseHeight = level.getChunkSource().getGenerator().getBaseHeight(
+			spawnPos.getX(),
+			spawnPos.getZ(),
+			net.minecraft.world.level.levelgen.Heightmap.Types.OCEAN_FLOOR_WG,
+			level,
+			randomState
+		);
 
 		FTFCommon.LOGGER.info(
-			"[FTF-Test] Generating spawn heightmap: spawn=({}, {}, Y={}) [Terrain={}, Category={}], chunk=({}, {}), bounds=[chunk ({}, {}) .. ({}, {})], blocks=[({}, {}) .. ({}, {})] ({}x{} = {} blocks)",
-			spawnPos.getX(), spawnPos.getZ(), spawnBlockY, spawnTerrainName, spawnTerrainCategory, spawnChunkX, spawnChunkZ,
+			"[FTF-Test] Generating spawn heightmap: spawn=({}, {}, Y={}, liveGenBaseY={}) [Terrain={}, Category={}], chunk=({}, {}), bounds=[chunk ({}, {}) .. ({}, {})], blocks=[({}, {}) .. ({}, {})] ({}x{} = {} blocks)",
+			spawnPos.getX(), spawnPos.getZ(), spawnBlockY, liveGenBaseHeight, spawnTerrainName, spawnTerrainCategory, spawnChunkX, spawnChunkZ,
 			minChunkX, minChunkZ, maxChunkX, maxChunkZ,
 			minX, minZ, maxX, maxZ, width, height, width * height
 		);
@@ -217,6 +224,32 @@ public final class HeightmapValidator {
 		}
 		if (minBlockElevation == maxBlockElevation) {
 			violations.add(String.format("Heightmap is completely flat across entire area (uniform height %d)", minBlockElevation));
+		}
+
+		// Verify live chunk generator finalDensity compilation parity against FTF heightmap
+		int matchingLiveColumns = 0;
+		for (int dz = -32; dz <= 32; dz += 32) {
+			for (int dx = -32; dx <= 32; dx += 32) {
+				int sx = spawnPos.getX() + dx;
+				int sz = spawnPos.getZ() + dz;
+				int expectedY = blockElevations[sx - minX][sz - minZ];
+				int actualBaseY = level.getChunkSource().getGenerator().getBaseHeight(
+					sx,
+					sz,
+					net.minecraft.world.level.levelgen.Heightmap.Types.OCEAN_FLOOR_WG,
+					level,
+					randomState
+				);
+				if (Math.abs(actualBaseY - expectedY) <= 8) {
+					matchingLiveColumns++;
+				}
+			}
+		}
+		if (matchingLiveColumns < 6) {
+			violations.add(String.format(
+				"Live chunk generator finalDensity diverged from FTF heightmap (only %d/9 sample columns matched within 8 blocks; spawn expected Y=%d, got liveGenBaseY=%d)",
+				matchingLiveColumns, spawnBlockY, liveGenBaseHeight
+			));
 		}
 
 		int maxStepBlocks = 0;
@@ -410,7 +443,7 @@ public final class HeightmapValidator {
 
 			HolderGetter<Noise> noiseLookup = initialPreset.buildPreviewLookups(server.registryAccess()).lookupOrThrow(FTFRegistries.NOISE);
 			long seed = server.overworld().getSeed();
-			BlockPos spawnPos = server.overworld().getSharedSpawnPos();
+			BlockPos spawnPos = server.overworld().getRespawnData().pos();
 			int radiusChunks = DEFAULT_CHUNK_RADIUS;
 			int spawnChunkX = spawnPos.getX() >> 4;
 			int spawnChunkZ = spawnPos.getZ() >> 4;

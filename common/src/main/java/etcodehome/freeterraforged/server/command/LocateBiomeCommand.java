@@ -37,11 +37,12 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.ComponentUtils;
 import net.minecraft.network.chat.HoverEvent;
 import net.minecraft.resources.ResourceKey;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.levelgen.RandomState;
+import net.minecraft.world.level.levelgen.densityfunction.SamplerContext;
 
 /** FTF-plan-aware, chunk-free biome locator. */
 public final class LocateBiomeCommand {
@@ -63,7 +64,7 @@ public final class LocateBiomeCommand {
                 .suggests((context, builder) -> {
                     var biomes = context.getSource().registryAccess().lookupOrThrow(Registries.BIOME);
                     return SharedSuggestionProvider.suggest(Stream.concat(
-                        biomes.listElementIds().map(key -> key.location().toString()),
+                        biomes.listElementIds().map(key -> key.identifier().toString()),
                         biomes.listTagIds().map(tag -> "#" + tag.location())
                     ), builder);
                 })
@@ -138,7 +139,7 @@ public final class LocateBiomeCommand {
         ServerLevel level = target.level();
         BlockPos origin = level == source.getLevel()
             ? BlockPos.containing(source.getPosition())
-            : level.getSharedSpawnPos();
+            : level.getRespawnData().pos();
         long start = System.nanoTime();
         CompletableFuture<BiomeLocateSearch.Result> future = BiomeLocateSearch.findFirst(
 			query, targetBiome, origin, settings
@@ -226,7 +227,7 @@ public final class LocateBiomeCommand {
         return new FTFBiomeLocateQuery(
 			runtime.selection(),
             ftfState.generatorContext(),
-            randomState.sampler(),
+            randomState.createClimateSampler(SamplerContext.EMPTY_UNCACHED),
 			runtime.placement(),
             () -> isCurrent(binding, expected)
         );
@@ -284,19 +285,19 @@ public final class LocateBiomeCommand {
         }
 
         BlockPos position = match.position();
-        ResourceLocation biomeId = match.biome().unwrapKey()
-            .map(ResourceKey::location)
-            .orElse(ResourceLocation.withDefaultNamespace("unknown"));
+        Identifier biomeId = match.biome().unwrapKey()
+            .map(ResourceKey::identifier)
+            .orElse(Identifier.withDefaultNamespace("unknown"));
         String teleport = level == source.getLevel()
             ? "/tp @s " + position.getX() + " " + position.getY() + " " + position.getZ()
-            : "/execute in " + level.dimension().location() + " run tp @s "
+            : "/execute in " + level.dimension().identifier() + " run tp @s "
                 + position.getX() + " " + position.getY() + " " + position.getZ();
         Component coordinates = ComponentUtils.wrapInSquareBrackets(Component.translatable(
             "chat.coordinates", position.getX(), position.getY(), position.getZ()
         )).withStyle(style -> style
             .withColor(ChatFormatting.GREEN)
-            .withClickEvent(new ClickEvent(ClickEvent.Action.SUGGEST_COMMAND, teleport))
-            .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, Component.translatable("chat.coordinates.tooltip"))));
+            .withClickEvent(new ClickEvent.SuggestCommand(teleport))
+            .withHoverEvent(new HoverEvent.ShowText(Component.translatable("chat.coordinates.tooltip"))));
 		int distance = (int) Math.sqrt((double) match.distanceSq());
 		source.sendSuccess(() -> successMessage(biomeId, coordinates, distance), false);
         FTFCommon.LOGGER.info(
@@ -310,7 +311,7 @@ public final class LocateBiomeCommand {
         );
     }
 
-	private static Component successMessage(ResourceLocation biomeId, Component coordinates, int distance) {
+	private static Component successMessage(Identifier biomeId, Component coordinates, int distance) {
 		return Component.translatableWithFallback(
 			KEY + "success",
 			"Found biome %s at %s (%s blocks away).",

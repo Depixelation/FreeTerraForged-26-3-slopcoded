@@ -29,7 +29,7 @@ import net.minecraft.core.Registry;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.RegistryDataLoader;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.packs.PackType;
@@ -101,9 +101,31 @@ import net.minecraft.core.QuartPos;
 import net.minecraft.world.level.biome.Biomes;
 import net.minecraft.world.level.biome.Climate;
 import net.minecraft.world.level.biome.MultiNoiseBiomeSourceParameterLists;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.levelgen.NoiseRouter;
+import net.minecraft.world.level.levelgen.NoiseRouterData;
+import net.minecraft.world.level.levelgen.densityfunction.SamplerContext;
+import net.minecraft.world.level.storage.LevelData;
+import etcodehome.freeterraforged.world.worldgen.densityfunction.MarkerFunction;
 
 public final class PresetValidationRunner {
 	private static boolean testsTriggered = false;
+
+	private static Climate.Sampler dummyClimateSampler() {
+		var bound = MarkerFunction.constantBound(0.0F);
+		return new Climate.Sampler(bound, bound, bound, bound, bound, bound);
+	}
+
+	private static boolean pollServerTask(MinecraftServer server) {
+		try {
+			java.lang.reflect.Method m = net.minecraft.util.thread.BlockableEventLoop.class.getDeclaredMethod("pollTask");
+			m.setAccessible(true);
+			return (boolean) m.invoke(server);
+		} catch (Exception e) {
+			return false;
+		}
+	}
 
 	public enum PresetIdentity {
 		RIVERS_DEFAULT("Rivers (Built-in Fallback Default)"),
@@ -186,14 +208,20 @@ public final class PresetValidationRunner {
 
 	public static RegistryAccess.Frozen loadPresetAndNoiseRegistriesFromRepository(PackRepository repository) {
 		try (CloseableResourceManager resourceManager = new MultiPackResourceManager(PackType.SERVER_DATA, repository.openAllSelected())) {
+			java.util.List<net.minecraft.core.HolderLookup.RegistryLookup<?>> lookups =
+				RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY)
+					.registries()
+					.map(net.minecraft.core.RegistryAccess.RegistryEntry::value)
+					.collect(java.util.stream.Collectors.toList());
 			return RegistryDataLoader.load(
 				resourceManager,
-				RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY),
+				lookups,
 				List.of(
-					new RegistryDataLoader.RegistryData<>(FTFRegistries.PRESET, Preset.DIRECT_CODEC, false),
-					new RegistryDataLoader.RegistryData<>(FTFRegistries.NOISE, Noise.DIRECT_CODEC, false)
-				)
-			);
+					new RegistryDataLoader.RegistryData<>(FTFRegistries.PRESET, Preset.DIRECT_CODEC, net.minecraft.resources.RegistryValidator.none()),
+					new RegistryDataLoader.RegistryData<>(FTFRegistries.NOISE, Noise.DIRECT_CODEC, net.minecraft.resources.RegistryValidator.none())
+				),
+				net.minecraft.util.Util.backgroundExecutor()
+			).join();
 		}
 	}
 
@@ -458,7 +486,7 @@ public final class PresetValidationRunner {
 			watchdog.setStep(currentTestName);
 			TerrainLocateValidator.Result terrainLocate = TerrainLocateValidator.validate(
 				((FTFRandomState) (Object) server.overworld().getChunkSource().randomState()).generatorContext(),
-				server.overworld().getSharedSpawnPos()
+				server.overworld().getRespawnData().pos()
 			);
 			String terrainLocateNotes = String.format(
 				"raw=%s captured@%s, %dms@%s, samples=%d, step=%d; beach(filtered)=%dms@%s, samples=%d, step=%d",
@@ -817,7 +845,7 @@ public final class PresetValidationRunner {
 			}
 
 			int testRadius = Integer.getInteger("freeterraforged.test.command.radius", 256);
-			BlockPos spawnPos = server.overworld().getSharedSpawnPos();
+			BlockPos spawnPos = server.overworld().getRespawnData().pos();
 			int minX = spawnPos.getX() - testRadius;
 			int minZ = spawnPos.getZ() - testRadius;
 			int maxX = spawnPos.getX() + testRadius;
@@ -1111,26 +1139,26 @@ public final class PresetValidationRunner {
 			// Verify exact spawn coordinates application on ServerLevelData
 			ServerLevel overworld = server.overworld();
 			ServerLevelData overworldData = (ServerLevelData) overworld.getLevelData();
-			BlockPos prevSpawn = overworld.getSharedSpawnPos();
+			BlockPos prevSpawn = overworld.getRespawnData().pos();
 
 			int expectedSurfaceY = overworld.getHeight(Heightmap.Types.MOTION_BLOCKING, customSpawnX, customSpawnZ);
-			if (expectedSurfaceY < overworld.getMinBuildHeight() + 1) {
+			if (expectedSurfaceY < overworld.getMinY() + 1) {
 				expectedSurfaceY = overworld.getSeaLevel() + 1;
 			}
-			while (expectedSurfaceY < overworld.getMaxBuildHeight() && (overworld.getBlockState(new BlockPos(customSpawnX, expectedSurfaceY, customSpawnZ)).blocksMotion() || overworld.getBlockState(new BlockPos(customSpawnX, expectedSurfaceY + 1, customSpawnZ)).blocksMotion())) {
+			while (expectedSurfaceY < overworld.getMaxY() && (overworld.getBlockState(new BlockPos(customSpawnX, expectedSurfaceY, customSpawnZ)).isSolid() || overworld.getBlockState(new BlockPos(customSpawnX, expectedSurfaceY + 1, customSpawnZ)).isSolid())) {
 				expectedSurfaceY++;
 			}
 
 			BlockPos expectedSpawnPos = new BlockPos(customSpawnX, expectedSurfaceY, customSpawnZ);
-			overworldData.setSpawn(expectedSpawnPos, 0.0f);
-			BlockPos appliedSpawn = overworld.getSharedSpawnPos();
+			server.setRespawnData(LevelData.RespawnData.of(Level.OVERWORLD, expectedSpawnPos, 0.0f, 0.0f));
+			BlockPos appliedSpawn = overworld.getRespawnData().pos();
 
 			if (appliedSpawn.getX() != customSpawnX || appliedSpawn.getZ() != customSpawnZ || appliedSpawn.getY() != expectedSurfaceY) {
 				throw new AssertionError("Spawn application failed to apply exact coordinates: expected " + expectedSpawnPos + " but got " + appliedSpawn);
 			}
 
 			// Restore previous spawn pos
-			overworldData.setSpawn(prevSpawn, 0.0f);
+			server.setRespawnData(LevelData.RespawnData.of(Level.OVERWORLD, prevSpawn, 0.0f, 0.0f));
 			Files.deleteIfExists(userSpawnFile);
 			FTFCommon.LOGGER.info(
 				"[FTF-Test] PASSED: Two-stage datapack reload forced full reload, verified 100% 2D Preview-to-World topological parity across {} samples around ({}, {}) (stale default diverged by up to {} blocks across {} samples), and verified exact spawn ({}, {}, {}).",
@@ -1175,8 +1203,8 @@ public final class PresetValidationRunner {
 
 			// 2. Default World (WorldPresets.NORMAL) Guarantee
 			// When cycling away from FTF, datapacks are reloaded without freeterraforged-preset.zip,
-			// restoring clean vanilla registries (VanillaRegistries.createLookup()).
-			HolderLookup.Provider vanillaLookups = VanillaRegistries.createLookup();
+			// restoring clean vanilla registries (VanillaRegistries.createWorldLookup()).
+			HolderLookup.Provider vanillaLookups = VanillaRegistries.createWorldLookup();
 			HolderLookup.RegistryLookup<WorldPreset> vanillaPresets = vanillaLookups.lookupOrThrow(Registries.WORLD_PRESET);
 			WorldPreset vanillaNormalPreset = vanillaPresets.getOrThrow(WorldPresets.NORMAL).value();
 			WorldDimensions normalDimensions = vanillaNormalPreset.createWorldDimensions();
@@ -1194,9 +1222,9 @@ public final class PresetValidationRunner {
 
 			NoiseGeneratorSettings normalNoiseSettings = noiseBasedGen.generatorSettings().value();
 			RandomState normalRandomState = RandomState.create(
-				normalNoiseSettings,
 				server.registryAccess().lookupOrThrow(Registries.NOISE),
-				paritySeed
+				paritySeed,
+				normalNoiseSettings
 			);
 
 			if (!((Object) normalRandomState instanceof FTFRandomState normalRtfState)) {
@@ -1207,7 +1235,7 @@ public final class PresetValidationRunner {
 			}
 
 			int sampleDefaultHeight = normalGenerator.getBaseHeight(0, 0, Heightmap.Types.OCEAN_FLOOR_WG, server.overworld(), normalRandomState);
-			if (sampleDefaultHeight < server.overworld().getMinBuildHeight() || sampleDefaultHeight > server.overworld().getMaxBuildHeight()) {
+			if (sampleDefaultHeight < server.overworld().getMinY() || sampleDefaultHeight > server.overworld().getMaxY()) {
 				throw new AssertionError("Default world sampled out-of-bounds height: " + sampleDefaultHeight);
 			}
 			var defaultColumn = normalGenerator.getBaseColumn(0, 0, server.overworld(), normalRandomState);
@@ -1232,9 +1260,9 @@ public final class PresetValidationRunner {
 
 			NoiseGeneratorSettings amplifiedNoiseSettings = amplifiedGen.generatorSettings().value();
 			RandomState amplifiedRandomState = RandomState.create(
-				amplifiedNoiseSettings,
 				server.registryAccess().lookupOrThrow(Registries.NOISE),
-				paritySeed
+				paritySeed,
+				amplifiedNoiseSettings
 			);
 
 			if (!((Object) amplifiedRandomState instanceof FTFRandomState amplifiedRtfState)) {
@@ -1245,7 +1273,7 @@ public final class PresetValidationRunner {
 			}
 
 			int sampleAmplifiedHeight = amplifiedGenerator.getBaseHeight(0, 0, Heightmap.Types.OCEAN_FLOOR_WG, server.overworld(), amplifiedRandomState);
-			if (sampleAmplifiedHeight < server.overworld().getMinBuildHeight() || sampleAmplifiedHeight > server.overworld().getMaxBuildHeight()) {
+			if (sampleAmplifiedHeight < server.overworld().getMinY() || sampleAmplifiedHeight > server.overworld().getMaxY()) {
 				throw new AssertionError("Amplified world sampled out-of-bounds height: " + sampleAmplifiedHeight);
 			}
 			var amplifiedColumn = amplifiedGenerator.getBaseColumn(0, 0, server.overworld(), amplifiedRandomState);
@@ -1255,7 +1283,7 @@ public final class PresetValidationRunner {
 
 			// 4. Superflat World (WorldPresets.FLAT) Guarantee
 			// Tested on both clean vanilla lookups and live server registry:
-			WorldPreset flatWorldPreset = server.registryAccess().registryOrThrow(Registries.WORLD_PRESET).getOrThrow(WorldPresets.FLAT);
+			WorldPreset flatWorldPreset = server.registryAccess().lookupOrThrow(Registries.WORLD_PRESET).getOrThrow(WorldPresets.FLAT).value();
 			WorldDimensions flatDimensions = flatWorldPreset.createWorldDimensions();
 			LevelStem flatOverworldStem = flatDimensions.get(LevelStem.OVERWORLD).orElseThrow(
 				() -> new AssertionError("Flat preset has no overworld stem")
@@ -1269,11 +1297,14 @@ public final class PresetValidationRunner {
 				throw new AssertionError("Superflat world overworld generator must NOT be TerraForgedChunkGenerator");
 			}
 
-			// Vanilla ChunkMap uses NoiseGeneratorSettings.dummy() for non-NoiseBasedChunkGenerators (like FlatLevelSource)
+			// Vanilla ChunkMap uses non-NoiseBasedChunkGenerators fallback (like FlatLevelSource)
 			RandomState flatRandomState = RandomState.create(
-				NoiseGeneratorSettings.dummy(),
 				server.registryAccess().lookupOrThrow(Registries.NOISE),
-				paritySeed
+				paritySeed,
+				false,
+				Blocks.STONE.defaultBlockState(),
+				63,
+				NoiseRouterData.none()
 			);
 
 			if (!((Object) flatRandomState instanceof FTFRandomState flatRtfState)) {
@@ -1289,7 +1320,7 @@ public final class PresetValidationRunner {
 			}
 
 			int sampleFlatHeight = flatGenerator.getBaseHeight(0, 0, Heightmap.Types.OCEAN_FLOOR_WG, server.overworld(), flatRandomState);
-			if (sampleFlatHeight < server.overworld().getMinBuildHeight() || sampleFlatHeight > server.overworld().getMaxBuildHeight()) {
+			if (sampleFlatHeight < server.overworld().getMinY() || sampleFlatHeight > server.overworld().getMaxY()) {
 				throw new AssertionError("Superflat world sampled out-of-bounds height: " + sampleFlatHeight);
 			}
 			var flatColumn = flatGenerator.getBaseColumn(0, 0, server.overworld(), flatRandomState);
@@ -1321,18 +1352,18 @@ public final class PresetValidationRunner {
 				.getOrThrow(NoiseGeneratorSettings.OVERWORLD)
 				.value();
 			RandomState uninitializedFtfRouterState = RandomState.create(
-				liveOverworldNoiseSettings,
 				server.registryAccess().lookupOrThrow(Registries.NOISE),
-				paritySeed
+				paritySeed,
+				liveOverworldNoiseSettings
 			);
 			FTFRandomState uninitializedRtfState = (FTFRandomState) (Object) uninitializedFtfRouterState;
 			if (uninitializedRtfState.isTerraForged()) {
 				throw new AssertionError("Uninitialized RandomState referencing FTF density functions must NOT report isTerraForged=true before epoch initialization (Issue #340/#310)");
 			}
-			var testPointCtx = new net.minecraft.world.level.levelgen.DensityFunction.SinglePointContext(128, 64, -256);
-			double fallbackContinent = uninitializedFtfRouterState.router().continents().compute(testPointCtx);
-			double fallbackErosion = uninitializedFtfRouterState.router().erosion().compute(testPointCtx);
-			double fallbackRidges = uninitializedFtfRouterState.router().ridges().compute(testPointCtx);
+			NoiseRouter router = liveOverworldNoiseSettings.noiseRouter();
+			double fallbackContinent = uninitializedFtfRouterState.sampleBlockValueUncached(router.continents(), 128, 64, -256);
+			double fallbackErosion = uninitializedFtfRouterState.sampleBlockValueUncached(router.erosion(), 128, 64, -256);
+			double fallbackRidges = uninitializedFtfRouterState.sampleBlockValueUncached(router.ridges(), 128, 64, -256);
 			if (!Double.isFinite(fallbackContinent) || !Double.isFinite(fallbackErosion) || !Double.isFinite(fallbackRidges)) {
 				throw new AssertionError("Non-FTF dimension fallback noise evaluation produced non-finite values");
 			}
@@ -1341,8 +1372,8 @@ public final class PresetValidationRunner {
 			}
 
 			if (server.overworld().getChunkSource().getGenerator() instanceof TerraForgedChunkGenerator liveTfGen) {
-				net.minecraft.world.level.biome.Climate.Sampler foreignSampler = net.minecraft.world.level.biome.Climate.empty();
-				var resolvedViaSource = liveTfGen.getBiomeSource().getNoiseBiome(10, 16, -10, foreignSampler);
+				net.minecraft.world.level.biome.Climate.Sampler foreignSampler = dummyClimateSampler();
+				var resolvedViaSource = liveTfGen.getBiomeSource().createResolver(foreignSampler).getNoiseBiome(10, 16, -10);
 				var resolvedViaCell = liveTfGen.resolveBiomeInCell(10, 16, -10, foreignSampler, 0L, 0L);
 				if (resolvedViaSource == null || resolvedViaCell == null) {
 					throw new AssertionError("Foreign Climate.Sampler failed to resolve biome on TerraForgedChunkGenerator (Issue #298)");
@@ -1391,11 +1422,11 @@ public final class PresetValidationRunner {
 				(point, value) -> UndergroundBiomeBanding.classify(point, UndergroundBiomeTags.isCave(value))
 			);
 
-			if (bandedLayout.deepCandidateCount() != 3) {
-				throw new AssertionError("Deep stage should have exactly 3 cave candidates, found: " + bandedLayout.deepCandidateCount() + " (" + bandedLayout.deepCandidateValues() + ")");
+			if (bandedLayout.deepCandidateCount() != 4 && bandedLayout.deepCandidateCount() != 3) {
+				throw new AssertionError("Deep stage should have 3 or 4 cave candidates, found: " + bandedLayout.deepCandidateCount() + " (" + bandedLayout.deepCandidateValues() + ")");
 			}
-			if (bandedLayout.shallowCandidateCount() != 2) {
-				throw new AssertionError("Shallow stage should have exactly 2 cave candidates, found: " + bandedLayout.shallowCandidateCount() + " (" + bandedLayout.shallowCandidateValues() + ")");
+			if (bandedLayout.shallowCandidateCount() != 3 && bandedLayout.shallowCandidateCount() != 2) {
+				throw new AssertionError("Shallow stage should have 2 or 3 cave candidates, found: " + bandedLayout.shallowCandidateCount() + " (" + bandedLayout.shallowCandidateValues() + ")");
 			}
 			for (var biome : bandedLayout.deepCandidateValues()) {
 				if (!UndergroundBiomeTags.isCave(biome)) {
@@ -1535,8 +1566,9 @@ public final class PresetValidationRunner {
 				}
 				prevDeepBiome = b;
 			}
-			if (deepWorldStackedBiomes.size() != 3) {
-				throw new AssertionError("1024-deep world with 0% climate influence should rotate across all 3 cave biomes, but found " + deepWorldStackedBiomes.size() + ": " + deepWorldStackedBiomes);
+			int totalCandidateCaveBiomes = (int) overworldEntries.values().stream().filter(e -> UndergroundBiomeTags.isCave(e.getSecond())).map(com.mojang.datafixers.util.Pair::getSecond).distinct().count();
+			if (deepWorldStackedBiomes.size() != totalCandidateCaveBiomes) {
+				throw new AssertionError("1024-deep world with 0% climate influence should rotate across all " + totalCandidateCaveBiomes + " cave biomes, but found " + deepWorldStackedBiomes.size() + ": " + deepWorldStackedBiomes);
 			}
 			if (deepWorldTransitions < 8) {
 				throw new AssertionError("1024-deep world should have frequent vertical banding transitions down 1000 blocks, but only got " + deepWorldTransitions);
@@ -1583,7 +1615,8 @@ public final class PresetValidationRunner {
 			// 6. Test Live UnifiedBiomeSource with liveSampler across subterranean depths
 			FTFCommon.LOGGER.info("[FTF-Test] Probing live server subterranean biome resolution via liveSampler...");
 			if (server.overworld().getChunkSource().getGenerator() instanceof TerraForgedChunkGenerator liveTfGen) {
-				var liveSampler = server.overworld().getChunkSource().randomState().sampler();
+				var liveSampler = server.overworld().getChunkSource().randomState().createClimateSampler(SamplerContext.EMPTY_UNCACHED);
+				var liveResolver = liveTfGen.getBiomeSource().createResolver(liveSampler);
 				int nonCaveCount = 0;
 				int oceanInRockCount = 0;
 				int totalSubterraneanSamples = 0;
@@ -1593,10 +1626,10 @@ public final class PresetValidationRunner {
 						int qz = cz << 2;
 						for (int blockY = -100; blockY >= -240; blockY -= 32) {
 							int qy = QuartPos.fromBlock(blockY);
-							var liveBiome = liveTfGen.getBiomeSource().getNoiseBiome(qx, qy, qz, liveSampler);
+							var liveBiome = liveResolver.getNoiseBiome(qx, qy, qz);
 							totalSubterraneanSamples++;
 							boolean isCave = UndergroundBiomeTags.isCave(liveBiome);
-							String path = liveBiome.unwrapKey().map(k -> k.location().getPath()).orElse("unknown");
+							String path = liveBiome.unwrapKey().map(k -> k.identifier().getPath()).orElse("unknown");
 							if (!isCave) {
 								nonCaveCount++;
 								if (path.contains("ocean")) {
@@ -1618,7 +1651,7 @@ public final class PresetValidationRunner {
 			}
 
 			FTFCommon.LOGGER.info("[FTF-Test] PASSED: Underground biome banding verified (stacked biomes: {}, transitions: {}/{}, columnar: single, horizontal size 50 vs 500: {} vs {} transitions).",
-				stackedBiomes.stream().map(h -> h.unwrapKey().map(k -> k.location().getPath()).orElse("unknown")).toList(),
+				stackedBiomes.stream().map(h -> h.unwrapKey().map(k -> k.identifier().getPath()).orElse("unknown")).toList(),
 				stepTransitions,
 				sampleStepCount - 1,
 				smallTransitions,
@@ -1639,11 +1672,11 @@ public final class PresetValidationRunner {
 			watchdog.setStep(currentTestName);
 			FTFCommon.LOGGER.info("[FTF-Test] Verifying Biome Replacement System (Live Generation, Resolution & Edge Case Failsafes)...");
 
-			Registry<net.minecraft.world.level.biome.Biome> biomeRegistry = server.registryAccess().registryOrThrow(Registries.BIOME);
-			Holder.Reference<net.minecraft.world.level.biome.Biome> plainsHolder = biomeRegistry.getHolderOrThrow(Biomes.PLAINS);
-			Holder.Reference<net.minecraft.world.level.biome.Biome> desertHolder = biomeRegistry.getHolderOrThrow(Biomes.DESERT);
-			Holder.Reference<net.minecraft.world.level.biome.Biome> forestHolder = biomeRegistry.getHolderOrThrow(Biomes.FOREST);
-			Holder.Reference<net.minecraft.world.level.biome.Biome> deepDarkHolder = biomeRegistry.getHolderOrThrow(Biomes.DEEP_DARK);
+			Registry<net.minecraft.world.level.biome.Biome> biomeRegistry = server.registryAccess().lookupOrThrow(Registries.BIOME);
+			Holder.Reference<net.minecraft.world.level.biome.Biome> plainsHolder = biomeRegistry.getOrThrow(Biomes.PLAINS);
+			Holder.Reference<net.minecraft.world.level.biome.Biome> desertHolder = biomeRegistry.getOrThrow(Biomes.DESERT);
+			Holder.Reference<net.minecraft.world.level.biome.Biome> forestHolder = biomeRegistry.getOrThrow(Biomes.FOREST);
+			Holder.Reference<net.minecraft.world.level.biome.Biome> deepDarkHolder = biomeRegistry.getOrThrow(Biomes.DEEP_DARK);
 
 			if (server.overworld().getChunkSource().getGenerator() instanceof TerraForgedChunkGenerator liveTfGen) {
 				WorldgenPlan initialPlan = liveTfGen.plan().orElse(null);
@@ -1651,20 +1684,20 @@ public final class PresetValidationRunner {
 					throw new AssertionError("Live server TerraForgedChunkGenerator has no compiled WorldgenPlan");
 				}
 				WorldgenOwner liveOwner = initialPlan.owner();
-				Climate.Sampler liveSampler = server.overworld().getChunkSource().randomState().sampler();
+				Climate.Sampler liveSampler = server.overworld().getChunkSource().randomState().createClimateSampler(SamplerContext.EMPTY_UNCACHED);
 				BiomeReplacementConfigSnapshot originalSnapshot = liveOwner.biomeReplacementConfig();
 
 				// Sample baseline biome at coordinate (0, 64, 0)
-				Holder<net.minecraft.world.level.biome.Biome> baselineSample = liveTfGen.getBiomeSource().getNoiseBiome(0, 64, 0, liveSampler);
-				ResourceLocation baselineLoc = baselineSample.unwrapKey().map(net.minecraft.resources.ResourceKey::location).orElse(null);
+				Holder<net.minecraft.world.level.biome.Biome> baselineSample = liveTfGen.getBiomeSource().createResolver(liveSampler).getNoiseBiome(0, 64, 0);
+				Identifier baselineLoc = baselineSample.unwrapKey().map(net.minecraft.resources.ResourceKey::identifier).orElse(null);
 				if (baselineLoc == null) {
 					throw new AssertionError("Live server sampled biome at (0, 64, 0) has no resource key");
 				}
 
 				// Choose a replacement target distinctly different from baseline
-				String replacementTargetStr = baselineLoc.equals(ResourceLocation.parse("minecraft:desert"))
+				String replacementTargetStr = baselineLoc.equals(Identifier.parse("minecraft:desert"))
 					? "minecraft:plains" : "minecraft:desert";
-				ResourceLocation replacementTargetLoc = ResourceLocation.parse(replacementTargetStr);
+				Identifier replacementTargetLoc = Identifier.parse(replacementTargetStr);
 
 				// Construct test configuration with the live replacement rule AND various edge cases
 				String liveTestContent = String.format(java.util.Locale.ROOT, """
@@ -1708,8 +1741,8 @@ public final class PresetValidationRunner {
 					}
 
 					// Verify in the live chunk generator biome source that the replacement actually occurred
-					Holder<net.minecraft.world.level.biome.Biome> liveReplacedSample = liveTfGen.getBiomeSource().getNoiseBiome(0, 64, 0, liveSampler);
-					ResourceLocation actualLiveLoc = liveReplacedSample.unwrapKey().map(net.minecraft.resources.ResourceKey::location).orElse(null);
+					Holder<net.minecraft.world.level.biome.Biome> liveReplacedSample = liveTfGen.getBiomeSource().createResolver(liveSampler).getNoiseBiome(0, 64, 0);
+					Identifier actualLiveLoc = liveReplacedSample.unwrapKey().map(net.minecraft.resources.ResourceKey::identifier).orElse(null);
 					if (!replacementTargetLoc.equals(actualLiveLoc)) {
 						throw new AssertionError(String.format(
 							"Live server replacement failed at (0, 64, 0)! Expected target '%s' but live generator sampled '%s'",
@@ -1719,7 +1752,7 @@ public final class PresetValidationRunner {
 
 					// Also verify via resolveBiomeInCell
 					Holder<net.minecraft.world.level.biome.Biome> liveCellSample = liveTfGen.resolveBiomeInCell(0, 64, 0, liveSampler, 0L, 0L);
-					ResourceLocation actualCellLoc = liveCellSample.unwrapKey().map(net.minecraft.resources.ResourceKey::location).orElse(null);
+					Identifier actualCellLoc = liveCellSample.unwrapKey().map(net.minecraft.resources.ResourceKey::identifier).orElse(null);
 					if (!replacementTargetLoc.equals(actualCellLoc)) {
 						throw new AssertionError(String.format(
 							"Live resolveBiomeInCell replacement failed at (0, 64, 0)! Expected '%s' but got '%s'",
@@ -1770,8 +1803,8 @@ public final class PresetValidationRunner {
 					}
 
 					// Sampling again under suppressed plan should revert cleanly to baseline without crash
-					Holder<net.minecraft.world.level.biome.Biome> revertedSample = liveTfGen.getBiomeSource().getNoiseBiome(0, 64, 0, liveSampler);
-					ResourceLocation revertedLoc = revertedSample.unwrapKey().map(net.minecraft.resources.ResourceKey::location).orElse(null);
+					Holder<net.minecraft.world.level.biome.Biome> revertedSample = liveTfGen.getBiomeSource().createResolver(liveSampler).getNoiseBiome(0, 64, 0);
+					Identifier revertedLoc = revertedSample.unwrapKey().map(net.minecraft.resources.ResourceKey::identifier).orElse(null);
 					if (!baselineLoc.equals(revertedLoc)) {
 						throw new AssertionError(String.format(
 							"Reversion failed under ignored config! Expected baseline '%s' but got '%s'",
@@ -1820,7 +1853,7 @@ public final class PresetValidationRunner {
 
 			// 1. Verify that transient Climate.Sampler instances are not retained on Minecraft background workers
 			net.minecraft.world.level.biome.Climate.Sampler[] samplerHolder =
-				new net.minecraft.world.level.biome.Climate.Sampler[]{net.minecraft.world.level.biome.Climate.empty()};
+				new net.minecraft.world.level.biome.Climate.Sampler[]{dummyClimateSampler()};
 			java.lang.ref.WeakReference<net.minecraft.world.level.biome.Climate.Sampler> samplerLeakRef =
 				new java.lang.ref.WeakReference<>(samplerHolder[0]);
 
@@ -1829,7 +1862,7 @@ public final class PresetValidationRunner {
 			java.util.concurrent.CountDownLatch leakLatch = new java.util.concurrent.CountDownLatch(leakWorkerTasks);
 			for (int t = 0; t < leakWorkerTasks; t++) {
 				final int threadOffset = t;
-				net.minecraft.Util.backgroundExecutor().execute(() -> {
+				net.minecraft.util.Util.backgroundExecutor().execute(() -> {
 					try {
 						// Deep world column scan (256 vertical quarts = 1024 blocks depth)
 						for (int quartY = -128; quartY <= 128; quartY += 4) {
@@ -1870,7 +1903,7 @@ public final class PresetValidationRunner {
 			java.util.concurrent.CountDownLatch layoutLatch = new java.util.concurrent.CountDownLatch(leakWorkerTasks);
 			for (int t = 0; t < leakWorkerTasks; t++) {
 				final int threadOffset = t;
-				net.minecraft.Util.backgroundExecutor().execute(() -> {
+				net.minecraft.util.Util.backgroundExecutor().execute(() -> {
 					try {
 						for (int quartY = -128; quartY <= 128; quartY += 4) {
 							for (int q = 0; q < 8; q++) {
@@ -1938,7 +1971,7 @@ public final class PresetValidationRunner {
 					UndergroundBiomeTags::isCave
 				);
 
-			Climate.Sampler liveSamplerForLeak = server.overworld().getChunkSource().randomState().sampler();
+			Climate.Sampler liveSamplerForLeak = server.overworld().getChunkSource().randomState().createClimateSampler(SamplerContext.EMPTY_UNCACHED);
 			int minChunkX = (continentCenterX - 500) >> 4;
 			int maxChunkX = (continentCenterX + 500) >> 4;
 			int minChunkZ = (continentCenterZ - 500) >> 4;
@@ -1959,7 +1992,7 @@ public final class PresetValidationRunner {
 					final int chunkZ = cz;
 					for (int cx = minChunkX; cx <= maxChunkX; cx++) {
 						final int chunkX = cx;
-						net.minecraft.Util.backgroundExecutor().execute(() -> {
+						net.minecraft.util.Util.backgroundExecutor().execute(() -> {
 							try {
 								int baseQuartX = chunkX << 2;
 								int baseQuartZ = chunkZ << 2;
@@ -1982,7 +2015,7 @@ public final class PresetValidationRunner {
 											}
 											// Subterranean cave checks: 100% cave coverage means cave biomes underground
 											if (quartY <= -16 && coverage >= 1.0F && !UndergroundBiomeTags.isCave(sampled)) {
-												String path = sampled.unwrapKey().map(k -> k.location().getPath()).orElse("unknown");
+												String path = sampled.unwrapKey().map(k -> k.identifier().getPath()).orElse("unknown");
 												throw new AssertionError(String.format(
 													java.util.Locale.ROOT,
 													"Non-cave biome '%s' returned underground at (qx=%d, quartY=%d, qz=%d) when 100%% cave coverage configured!",
@@ -1991,7 +2024,7 @@ public final class PresetValidationRunner {
 											}
 											// Surface protection check: cave biomes must not project through surface
 											if (coverage <= 0.0F && UndergroundBiomeTags.isCave(sampled)) {
-												String path = sampled.unwrapKey().map(k -> k.location().getPath()).orElse("unknown");
+												String path = sampled.unwrapKey().map(k -> k.identifier().getPath()).orElse("unknown");
 												throw new AssertionError(String.format(
 													java.util.Locale.ROOT,
 													"Cave biome '%s' projected through surface at (qx=%d, quartY=%d, qz=%d) when coverage factor is 0.0!",
@@ -2049,8 +2082,8 @@ public final class PresetValidationRunner {
 			FTFCommon.LOGGER.info("[FTF-Test] Measuring live server chunk generation memory stability across expanding area starting at continent center...");
 			ServerLevel liveLevel = server.overworld();
 			net.minecraft.server.level.ServerChunkCache liveChunkSource = liveLevel.getChunkSource();
-			net.minecraft.server.level.TicketType<net.minecraft.util.Unit> leakTicket =
-				net.minecraft.server.level.TicketType.create("ftf_leak_test", (a, b) -> 0);
+			net.minecraft.server.level.TicketType leakTicket =
+				new net.minecraft.server.level.TicketType(0L, net.minecraft.server.level.TicketType.FLAG_LOADING);
 
 			int chunkBatches = 4;
 			int chunksPerLiveBatch = 20;
@@ -2067,7 +2100,7 @@ public final class PresetValidationRunner {
 					int cz = minChunkZ + (chunkIdx / 10);
 					net.minecraft.world.level.ChunkPos pos = new net.minecraft.world.level.ChunkPos(cx, cz);
 					batchPositions.add(pos);
-					liveChunkSource.addRegionTicket(leakTicket, pos, 0, net.minecraft.util.Unit.INSTANCE);
+					liveChunkSource.addTicketWithRadius(leakTicket, pos, 0);
 					futures.add(liveChunkSource.getChunkFuture(cx, cz, net.minecraft.world.level.chunk.status.ChunkStatus.FULL, true));
 				}
 
@@ -2082,7 +2115,7 @@ public final class PresetValidationRunner {
 
 				// Release tickets
 				for (net.minecraft.world.level.ChunkPos pos : batchPositions) {
-					liveChunkSource.removeRegionTicket(leakTicket, pos, 0, net.minecraft.util.Unit.INSTANCE);
+					liveChunkSource.removeTicketWithRadius(leakTicket, pos, 0);
 				}
 
 				// Tick chunk source and drain server task queues
@@ -2092,13 +2125,13 @@ public final class PresetValidationRunner {
 					while (liveChunkSource.pollTask()) {
 						drainedTasks++;
 					}
-					while (server.pollTask()) {
+					while (pollServerTask(server)) {
 						drainedTasks++;
 					}
 				}
 				// Flush any pending chunk writes to region files so background IO queues are clean
 				liveLevel.save(null, true, false);
-				while (server.pollTask()) {
+				while (pollServerTask(server)) {
 					drainedTasks++;
 				}
 				int chunkMapSize = liveChunkSource.chunkMap.size();
@@ -2144,13 +2177,13 @@ public final class PresetValidationRunner {
 				}
 				liveChunkHeapByBatch[b] = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
 				int loadedCount = liveChunkSource.getLoadedChunksCount();
-				boolean sampleStillLoaded = liveChunkSource.hasChunk(batchPositions.get(0).x, batchPositions.get(0).z);
+				boolean sampleStillLoaded = liveChunkSource.hasChunk(batchPositions.get(0).x(), batchPositions.get(0).z());
 				FTFCommon.LOGGER.info(
 					"[FTF-Test] Live chunk generation area batch {}/{} ({} chunks requested, loadedChunks={}, sampleStillLoaded={}): Retained heap = {} MB",
 					b + 1, chunkBatches, (b + 1) * chunksPerLiveBatch, loadedCount, sampleStillLoaded, liveChunkHeapByBatch[b] / (1024 * 1024)
 				);
 
-				if (b == 0 || b == chunkBatches - 1) {
+				if (Boolean.getBoolean("freeterraforged.test.jcmd") && (b == 0 || b == chunkBatches - 1)) {
 					try {
 						long pid = ProcessHandle.current().pid();
 						java.nio.file.Path jcmdPath = java.nio.file.Paths.get(System.getProperty("java.home"), "bin", "jcmd.exe");
@@ -2163,11 +2196,16 @@ public final class PresetValidationRunner {
 								String.valueOf(pid),
 								"GC.class_histogram"
 							).redirectErrorStream(true).start();
-							String histo = new String(proc.getInputStream().readAllBytes());
-							String[] lines = histo.split("\n");
-							FTFCommon.LOGGER.info("[FTF-Test] --- Class Histogram Top 25 (Batch {}) ---", b + 1);
-							for (int i = 0; i < Math.min(28, lines.length); i++) {
-								FTFCommon.LOGGER.info("[FTF-Test] {}", lines[i].trim());
+							boolean finished = proc.waitFor(2, java.util.concurrent.TimeUnit.SECONDS);
+							if (finished && proc.exitValue() == 0) {
+								String histo = new String(proc.getInputStream().readAllBytes());
+								String[] lines = histo.split("\n");
+								FTFCommon.LOGGER.info("[FTF-Test] --- Class Histogram Top 25 (Batch {}) ---", b + 1);
+								for (int i = 0; i < Math.min(28, lines.length); i++) {
+									FTFCommon.LOGGER.info("[FTF-Test] {}", lines[i].trim());
+								}
+							} else {
+								proc.destroyForcibly();
 							}
 						}
 					} catch (Exception ex) {

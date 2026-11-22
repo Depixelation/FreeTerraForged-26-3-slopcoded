@@ -3,22 +3,14 @@ package etcodehome.freeterraforged.fabric;
 import etcodehome.freeterraforged.client.command.FTFCommands;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
-import net.fabricmc.fabric.api.datagen.v1.DataGeneratorEntrypoint;
-import net.fabricmc.fabric.api.datagen.v1.FabricDataGenerator;
-import net.fabricmc.fabric.api.datagen.v1.FabricDataGenerator.Pack;
-import net.fabricmc.fabric.api.datagen.v1.FabricDataOutput;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
-import net.minecraft.data.metadata.PackMetadataGenerator;
-import net.minecraft.network.chat.Component;
 import etcodehome.freeterraforged.FTFCommon;
-import etcodehome.freeterraforged.client.data.FTFLanguageProvider;
-import etcodehome.freeterraforged.client.data.FTFTranslationKeys;
 import etcodehome.freeterraforged.fabric.network.FTFFabricNetworking;
 import etcodehome.freeterraforged.server.FTFMinecraftServer;
 import etcodehome.freeterraforged.world.worldgen.runtime.WorldgenLifecycle;
 import etcodehome.freeterraforged.world.worldgen.runtime.WorldgenResourceRevision;
 
-public class FTFFabric implements ModInitializer, DataGeneratorEntrypoint {
+public class FTFFabric implements ModInitializer {
 
 	@Override
 	public void onInitialize() {
@@ -37,13 +29,5 @@ public class FTFFabric implements ModInitializer, DataGeneratorEntrypoint {
 		CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> {
 			FTFCommands.register(dispatcher);
 		});
-	}
-
-	@Override
-	public void onInitializeDataGenerator(FabricDataGenerator fabricDataGenerator) {
-		Pack pack = fabricDataGenerator.createPack();
-
-		pack.addProvider((FabricDataOutput output) -> new FTFLanguageProvider.EnglishUS(output));
-		pack.addProvider((FabricDataOutput output) -> PackMetadataGenerator.forFeaturePack(output, Component.translatable(FTFTranslationKeys.METADATA_DESCRIPTION)));
 	}
 }

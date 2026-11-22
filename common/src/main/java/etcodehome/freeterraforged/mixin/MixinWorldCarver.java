@@ -1,38 +1,42 @@
 package etcodehome.freeterraforged.mixin;
 
-import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.levelgen.carver.CarverConfiguration;
-import net.minecraft.world.level.levelgen.carver.CarvingContext;
-import net.minecraft.world.level.levelgen.carver.WorldCarver;
-import net.minecraft.world.level.material.Fluids;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
+import com.llamalad7.mixinextras.sugar.Local;
+import etcodehome.freeterraforged.world.worldgen.FTFRandomState;
+import net.minecraft.tags.TagKey;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.levelgen.NoiseBasedChunkGenerator;
+import net.minecraft.world.level.levelgen.RandomState;
+import net.minecraft.world.level.material.Fluids;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
-import etcodehome.freeterraforged.world.worldgen.FTFRandomState;
 
-@Mixin(WorldCarver.class)
+@Mixin(NoiseBasedChunkGenerator.class)
 public class MixinWorldCarver {
 	@WrapOperation(
-		method = "carveBlock",
+		method = "lambda$applyCarvingMask$0",
 		at = @At(
 			value = "INVOKE",
-			target = "Lnet/minecraft/world/level/levelgen/carver/WorldCarver;canReplaceBlock(Lnet/minecraft/world/level/levelgen/carver/CarverConfiguration;Lnet/minecraft/world/level/block/state/BlockState;)Z"
+			target = "Lnet/minecraft/world/level/block/state/BlockState;is(Lnet/minecraft/tags/TagKey;)Z"
 		)
 	)
-	private boolean freeterraforged$preventWaterCarving(
-		WorldCarver<?> carver,
-		CarverConfiguration config,
+	private static boolean freeterraforged$preventWaterCarving(
 		BlockState state,
+		TagKey<Block> tag,
 		Operation<Boolean> original,
-		CarvingContext context
+		@Local(argsOnly = true) RandomState randomState
 	) {
-		if ((Object) context.randomState() instanceof FTFRandomState randomState
-			&& randomState.isTerraForged()
+		if (original.call(state, tag)) {
+			return true;
+		}
+		if ((Object) randomState instanceof FTFRandomState ftfRandomState
+			&& ftfRandomState.isTerraForged()
 			&& (state.getFluidState().isSourceOfType(Fluids.WATER)
 				|| state.getFluidState().isSourceOfType(Fluids.FLOWING_WATER))) {
-			return false;
+			return true;
 		}
-		return original.call(carver, config, state);
+		return false;
 	}
 }

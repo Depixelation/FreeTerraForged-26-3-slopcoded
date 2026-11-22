@@ -12,7 +12,7 @@ import com.mojang.serialization.JsonOps;
 
 import net.minecraft.core.Direction;
 import net.minecraft.core.HolderLookup;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.resources.RegistryOps;
 import net.minecraft.world.level.levelgen.blockpredicates.BlockPredicate;
 import net.minecraft.world.level.levelgen.blockpredicates.BlockPredicateType;
@@ -24,7 +24,7 @@ import net.minecraft.world.level.levelgen.placement.HeightRangePlacement;
 import net.minecraft.world.level.levelgen.placement.InSquarePlacement;
 import net.minecraft.world.level.levelgen.placement.PlacedFeature;
 import net.minecraft.world.level.levelgen.placement.PlacementModifier;
-import net.minecraft.world.level.levelgen.placement.RandomOffsetPlacement;
+import net.minecraft.world.level.levelgen.placement.OffsetPlacement;
 import net.minecraft.world.level.levelgen.placement.RarityFilter;
 
 /**
@@ -38,7 +38,7 @@ public final class SurfacePlacementClassifier {
 
 	public static Classification classify(
 		PlacedFeature feature,
-		Optional<ResourceLocation> featureId,
+		Optional<Identifier> featureId,
 		HolderLookup.Provider registries
 	) {
 		try {
@@ -50,7 +50,7 @@ public final class SurfacePlacementClassifier {
 
 	private static Classification classifyChecked(
 		PlacedFeature feature,
-		Optional<ResourceLocation> featureId,
+		Optional<Identifier> featureId,
 		HolderLookup.Provider registries
 	) {
 		List<PlacementModifier> modifiers = feature.placement();
@@ -63,7 +63,7 @@ public final class SurfacePlacementClassifier {
 		if (!(modifiers.get(scanIndex - 1) instanceof HeightRangePlacement height)
 			|| !DynamicHeightRangePlacement.isCanonicalRange(height)
 			|| !(modifiers.get(scanIndex - 2) instanceof InSquarePlacement)
-			|| !(modifiers.get(scanIndex + 1) instanceof RandomOffsetPlacement offset)) {
+			|| !(modifiers.get(scanIndex + 1) instanceof OffsetPlacement offset)) {
 			return Classification.rejected("NON_CANONICAL_SURFACE_SCAN_SEQUENCE");
 		}
 
@@ -97,7 +97,7 @@ public final class SurfacePlacementClassifier {
 		if (direction != Direction.DOWN) {
 			return Classification.rejected("NON_DOWNWARD_SURFACE_SCAN");
 		}
-		JsonObject offsetJson = encode(RandomOffsetPlacement.CODEC.codec(), offset, registries);
+		JsonObject offsetJson = encode(OffsetPlacement.CODEC.codec(), offset, registries);
 		int expectedY = -direction.getStepY();
 		if (offsetJson == null
 			|| !isConstant(offsetJson.get("xz_spread"), 0)
@@ -227,7 +227,7 @@ public final class SurfacePlacementClassifier {
 	}
 
 	public record SurfacePipeline(
-		Optional<ResourceLocation> featureId,
+		Optional<Identifier> featureId,
 		HeightRangePlacement heightRange,
 		EnvironmentScanPlacement scan,
 		BlockPredicate target,

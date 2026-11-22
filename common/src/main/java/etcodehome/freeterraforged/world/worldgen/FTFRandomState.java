@@ -2,7 +2,7 @@ package etcodehome.freeterraforged.world.worldgen;
 
 import org.jetbrains.annotations.Nullable;
 
-import net.minecraft.world.level.levelgen.DensityFunction;
+import net.minecraft.world.level.levelgen.densityfunction.DensityFunction;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.Preset;
 import etcodehome.freeterraforged.world.worldgen.noise.module.Noise;
 import etcodehome.freeterraforged.world.worldgen.runtime.WorldgenEpoch;

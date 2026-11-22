@@ -1,12 +1,12 @@
 package etcodehome.freeterraforged.data.worldgen.preset;
 
+import net.minecraft.util.BoundedFloatFunction;
 import net.minecraft.util.CubicSpline;
-import net.minecraft.util.ToFloatFunction;
 
 // this is only for reference because the original is impossible to read
 class TerrainProvider {
 
-    public static <C, I extends ToFloatFunction<C>> CubicSpline<C, I> overworldFactor(I continentalness, I erosion, I ridges, I peaksAndValleys) {
+    public static <C, I extends BoundedFloatFunction<C>> CubicSpline<I> overworldFactor(I continentalness, I erosion, I ridges, I peaksAndValleys) {
         return CubicSpline.builder(continentalness)
         	.addPoint(-0.19F, 3.95F)
         	.addPoint(-0.15F, TerrainProvider.getErosionFactor(erosion, ridges, peaksAndValleys, 6.25F, true))
@@ -15,12 +15,12 @@ class TerrainProvider {
         	.addPoint(0.06F, TerrainProvider.getErosionFactor(erosion, ridges, peaksAndValleys, 4.69F, false)).build();
     }
 
-    private static <C, I extends ToFloatFunction<C>> CubicSpline<C, I> getErosionFactor(I erosion, I ridges, I peaksAndValleys, float baseFactor, boolean hasRivers) {
-        CubicSpline<C, I> cubicSpline = CubicSpline.builder(ridges)
+    private static <C, I extends BoundedFloatFunction<C>> CubicSpline<I> getErosionFactor(I erosion, I ridges, I peaksAndValleys, float baseFactor, boolean hasRivers) {
+        CubicSpline<I> cubicSpline = CubicSpline.builder(ridges)
         	.addPoint(-0.2F, 6.3F)
         	.addPoint(0.2F, baseFactor)
         	.build();
-        CubicSpline.Builder<C, I> builder = CubicSpline.builder(erosion)
+        CubicSpline.Builder<I> builder = CubicSpline.builder(erosion)
         	.addPoint(-0.6f, cubicSpline)
         	.addPoint(-0.5f, CubicSpline.builder(ridges)
         		.addPoint(-0.05F, 6.3F).addPoint(0.05F, 2.67F)
@@ -35,11 +35,11 @@ class TerrainProvider {
         	)
         	.addPoint(0.03F, cubicSpline);
         if (hasRivers) {
-            CubicSpline<C, I> cubicSpline2 = CubicSpline.builder(ridges)
+            CubicSpline<I> cubicSpline2 = CubicSpline.builder(ridges)
             	.addPoint(0.0F, baseFactor)
             	.addPoint(0.1F, 0.625F)
             	.build();
-            CubicSpline<C, I> cubicSpline3 = CubicSpline.builder(peaksAndValleys)
+            CubicSpline<I> cubicSpline3 = CubicSpline.builder(peaksAndValleys)
             	.addPoint(-0.9F, baseFactor)
             	.addPoint(-0.69F, cubicSpline2)
             	.build();
@@ -48,11 +48,11 @@ class TerrainProvider {
             	   .addPoint(0.55F, cubicSpline3)
             	   .addPoint(0.62F, baseFactor);
         } else {
-            CubicSpline<C, I> cubicSpline2 = CubicSpline.builder(peaksAndValleys)
+            CubicSpline<I> cubicSpline2 = CubicSpline.builder(peaksAndValleys)
             	.addPoint(-0.7F, cubicSpline)
             	.addPoint(-0.15F, 1.37F)
             	.build();
-            CubicSpline<C, I> cubicSpline3 = CubicSpline.builder(peaksAndValleys)
+            CubicSpline<I> cubicSpline3 = CubicSpline.builder(peaksAndValleys)
             	.addPoint(0.45F, cubicSpline)
             	.addPoint(0.7F, 1.56F)
             	.build();
@@ -66,4 +66,3 @@ class TerrainProvider {
     }
 
 }
-

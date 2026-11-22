@@ -8,7 +8,7 @@ import java.util.Set;
 
 import net.minecraft.core.Holder;
 import net.minecraft.core.QuartPos;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.biome.Climate;
 import etcodehome.freeterraforged.world.worldgen.GeneratorContext;
@@ -423,7 +423,7 @@ public final class WorldgenBiomeSelection {
 			WorldgenPlans.SpatialResult spatial,
 			Climate.TargetPoint target
 		) {
-			ResourceLocation spatialDomain = spatial.domain();
+			Identifier spatialDomain = spatial.domain();
 			WorldgenPlans.ProviderResult selection;
 			try {
 				selection = this.providers.resolveRequired(spatialDomain, target);

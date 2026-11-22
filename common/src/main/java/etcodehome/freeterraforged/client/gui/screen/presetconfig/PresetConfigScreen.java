@@ -42,7 +42,7 @@ public class PresetConfigScreen extends LinkedPageScreen {
 		try {
 			this.releaseResources();
 		} finally {
-			this.minecraft.setScreen(this.parent);
+			this.minecraft.setScreenAndShow(this.parent);
 		}
 	}
 

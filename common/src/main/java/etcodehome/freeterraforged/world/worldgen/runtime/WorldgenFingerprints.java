@@ -22,7 +22,7 @@ public final class WorldgenFingerprints {
 	public static String tags(RegistryAccess registries) {
 		MessageDigest digest = sha256();
 		registries.registries()
-			.sorted(Comparator.comparing(entry -> entry.key().location().toString()))
+			.sorted(Comparator.comparing(entry -> entry.key().identifier().toString()))
 			.forEach(entry -> appendRegistryTags(digest, entry.value()));
 		return HexFormat.of().formatHex(digest.digest());
 	}
@@ -38,16 +38,16 @@ public final class WorldgenFingerprints {
 	}
 
 	private static <T> void appendRegistryTags(MessageDigest digest, Registry<T> registry) {
-		List<Pair<TagKey<T>, HolderSet.Named<T>>> tags = registry.getTags()
-			.sorted(Comparator.comparing(value -> value.getFirst().location().toString()))
+		List<HolderSet.Named<T>> tags = registry.getTags()
+			.sorted(Comparator.comparing(value -> value.key().location().toString()))
 			.toList();
-		for (Pair<TagKey<T>, HolderSet.Named<T>> tag : tags) {
-			append(digest, registry.key().location().toString());
-			append(digest, tag.getFirst().location().toString());
-			tag.getSecond().stream()
+		for (HolderSet.Named<T> tag : tags) {
+			append(digest, registry.key().identifier().toString());
+			append(digest, tag.key().location().toString());
+			tag.stream()
 				.map(Holder::unwrapKey)
 				.map(key -> key.orElseThrow(() -> new IllegalStateException("Tag contains an unkeyed registry value")))
-				.map(key -> key.location().toString())
+				.map(key -> key.identifier().toString())
 				.sorted()
 				.forEach(value -> append(digest, value));
 		}

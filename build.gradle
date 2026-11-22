@@ -1,34 +1,27 @@
 plugins {
-    id "architectury-plugin" version "3.4.164"
-    id "dev.architectury.loom" version "1.11.458" apply false
-}
-
-architectury {
-    minecraft = rootProject.minecraft_version
+    id "net.fabricmc.fabric-loom" version "1.18-SNAPSHOT" apply false
 }
 
 subprojects {
-
-    // Skips Mercury source remapping to prevent Eclipse JDT AbortCompilation crashes
-    tasks.matching { it.name == "remapSourcesJar" }.configureEach {
-        enabled = false
-    }
-
-    apply plugin: "dev.architectury.loom"
+    apply plugin: "net.fabricmc.fabric-loom"
 
     loom {
-        silentMojangMappingsLicense()
+        accessWidenerPath = rootProject.file("common/src/main/resources/freeterraforged.accesswidener")
+        enableTransitiveAccessWideners = false
+        enableModProvidedJavadoc = false
+        interfaceInjection {
+            enableDependencyInterfaceInjection = false
+        }
     }
 
     dependencies {
         minecraft "com.mojang:minecraft:${rootProject.minecraft_version}"
-        mappings loom.officialMojangMappings()
     }
 }
 
 allprojects {
     apply plugin: "java"
-    apply plugin: "architectury-plugin"
+    apply plugin: "java-library"
     apply plugin: "maven-publish"
 
     base {
@@ -39,21 +32,26 @@ allprojects {
 
     repositories {
         maven { url "https://maven.shedaniel.me" }
-        maven { url 'https://maven.minecraftforge.net/' }
+        maven { url "https://maven.minecraftforge.net/" }
         maven { url "https://maven.architectury.dev/" }
         maven { url "https://maven.fabricmc.net/" }
+        maven { url "https://api.modrinth.com/maven" }
+        mavenCentral()
         gradlePluginPortal()
     }
 
-    tasks.withType(JavaCompile) {
+    tasks.withType(JavaCompile).configureEach {
         options.encoding = "UTF-8"
-        options.release = 21
+        options.release = 25
+        options.compilerArgs.addAll(["-Xmaxerrs", "1000"])
     }
 
     java {
         toolchain {
-            languageVersion = JavaLanguageVersion.of(21)
+            languageVersion = JavaLanguageVersion.of(25)
         }
+        sourceCompatibility = JavaVersion.VERSION_25
+        targetCompatibility = JavaVersion.VERSION_25
         withSourcesJar()
     }
 }
@@ -136,7 +134,7 @@ tasks.register("generatePresetTestReport") {
 
 tasks.register("runPresetTest") {
     group = "verification"
-    description = "Runs headless preset validation on both Fabric and NeoForge"
-    dependsOn(":common:test", ":fabric:runPresetTest", ":neoforge:runPresetTest")
+    description = "Runs headless preset validation on Fabric"
+    dependsOn(":common:test", ":fabric:runPresetTest")
     finalizedBy("generatePresetTestReport")
 }

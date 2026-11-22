@@ -19,7 +19,7 @@ import net.minecraft.core.Holder;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceKey;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.biome.BiomeGenerationSettings;
 import net.minecraft.world.level.biome.BiomeSource;
@@ -29,7 +29,7 @@ import net.minecraft.world.level.biome.MultiNoiseBiomeSource;
 import net.minecraft.world.level.chunk.ChunkGenerator;
 import net.minecraft.world.level.levelgen.GenerationStep;
 import net.minecraft.world.level.levelgen.NoiseBasedChunkGenerator;
-import net.minecraft.world.level.levelgen.carver.ConfiguredWorldCarver;
+import net.minecraft.world.level.levelgen.carver.WorldCarver;
 import net.minecraft.world.level.levelgen.placement.PlacedFeature;
 import net.minecraft.world.level.levelgen.structure.Structure;
 import net.minecraft.world.level.levelgen.structure.StructureSet;
@@ -186,7 +186,7 @@ public final class MinecraftWorldgenPlanCompiler {
 			"Compiled biome replacement plan owner={} type={} purpose={} dimension={} config_revision={} "
 				+ "origin={} decisions={} removals={} fingerprint={}";
 		Object[] summaryArguments = {
-			plan.owner().id(), plan.owner().type(), purpose, plan.owner().dimension().location(),
+			plan.owner().id(), plan.owner().type(), purpose, plan.owner().dimension().identifier(),
 			config.revision(), config.origin(), replacement.decisionCount(),
 			replacement.removals().size(), config.fingerprint()
 		};
@@ -344,7 +344,7 @@ public final class MinecraftWorldgenPlanCompiler {
 			failure -> new WorldgenPlans.BiomeReplacement(
 				failure,
 				new BiomeReplacementPlan(
-					owner.biomeReplacementConfig(), owner.dimension().location(),
+					owner.biomeReplacementConfig(), owner.dimension().identifier(),
 					Map.of(), java.util.Set.of(), java.util.Set.of(),
 					owner.biomeReplacementConfig().config().diagnostics()
 				)
@@ -376,7 +376,7 @@ public final class MinecraftWorldgenPlanCompiler {
 			);
 		} else if (generator instanceof NoiseBasedChunkGenerator noiseGenerator) {
 			surfacePlan = compileFacet(WorldgenFacet.SURFACE, () -> {
-				var root = noiseGenerator.generatorSettings().value().surfaceRule();
+				var root = noiseGenerator.generatorSettings().value().materialRule().value();
 				WorldgenSurfaceInputs.requireSupported(root, owner.registries());
 				return new WorldgenPlans.Surface(
 					descriptor(WorldgenFacet.SURFACE, CapabilityState.NORMALIZED,
@@ -483,11 +483,9 @@ public final class MinecraftWorldgenPlanCompiler {
 				() -> new IllegalStateException("Selected biome is not registry-keyed")
 			);
 			BiomeGenerationSettings settings = realizedGenerationSettings(generator, biome);
-			for (GenerationStep.Carving step : GenerationStep.Carving.values()) {
-				int index = 0;
-				for (Holder<ConfiguredWorldCarver<?>> carver : settings.getCarvers(step)) {
-					pipelines.add(new WorldgenPlans.CarverPipeline(biomeKey, step, index++, carver));
-				}
+			int index = 0;
+			for (Holder<WorldCarver> carver : settings.getCarvers()) {
+				pipelines.add(new WorldgenPlans.CarverPipeline(biomeKey, index++, carver));
 			}
 		}
 		return new WorldgenPlans.Carvers(
@@ -580,7 +578,7 @@ public final class MinecraftWorldgenPlanCompiler {
 
 		if (providers.providers().isEmpty() && !composition.entries().isEmpty()
 			&& composition.descriptor().state() != CapabilityState.UNAVAILABLE) {
-			ResourceLocation id = FTFCommon.location("selected_source_root");
+			Identifier id = FTFCommon.location("selected_source_root");
 			Climate.ParameterList<Holder<Biome>> candidateTable = composition.candidateRoot().isPresent()
 				? composition.candidateRoot().orElseThrow().candidates()
 				: new Climate.ParameterList<>(composition.entries());
@@ -600,7 +598,7 @@ public final class MinecraftWorldgenPlanCompiler {
 			);
 			providerChanged = true;
 		} else if (!providers.providers().isEmpty() && !candidateOperations.stages().isEmpty()) {
-			ResourceLocation rootDomain = providers.rootCompositionDomain().orElse(null);
+			Identifier rootDomain = providers.rootCompositionDomain().orElse(null);
 			if (rootDomain == null || composition.entries().isEmpty()
 				|| composition.descriptor().state() == CapabilityState.UNAVAILABLE) {
 				composition = new WorldgenPlans.BiomeComposition(
@@ -661,7 +659,7 @@ public final class MinecraftWorldgenPlanCompiler {
 		}
 
 		if (spatial.resolver().isEmpty() && providers.providers().size() == 1) {
-			ResourceLocation domain = providers.providers().getFirst().id();
+			Identifier domain = providers.providers().getFirst().id();
 			spatial = new WorldgenPlans.SpatialOwnership(
 				new PlanDescriptor(
 					FTFCommon.location("runtime/candidate_spatial_ownership"),
@@ -768,7 +766,7 @@ public final class MinecraftWorldgenPlanCompiler {
 	}
 
 	private static String biomeId(Holder<Biome> biome) {
-		return biome.unwrapKey().map(key -> key.location().toString()).orElse("<unregistered>");
+		return biome.unwrapKey().map(key -> key.identifier().toString()).orElse("<unregistered>");
 	}
 
 	private static WorldgenPlan replaceSelectionMaterialization(
@@ -948,14 +946,14 @@ public final class MinecraftWorldgenPlanCompiler {
 		private Climate.Sampler sampler;
 		private WorldgenPlans.SamplerDecoration samplerDecoration;
 		private WorldgenPlans.ProviderSelection providers;
-		private ResourceLocation domain;
+		private Identifier domain;
 		private boolean usedFallback;
 
 		void init(
 			Climate.Sampler sampler,
 			WorldgenPlans.SamplerDecoration samplerDecoration,
 			WorldgenPlans.ProviderSelection providers,
-			ResourceLocation domain,
+			Identifier domain,
 			boolean usedFallback
 		) {
 			this.sampler = sampler;
@@ -994,12 +992,12 @@ public final class MinecraftWorldgenPlanCompiler {
 		WorldgenPlans.SamplerDecoration samplerDecoration,
 		WorldgenCompilationPurpose purpose
 	) {
-		ResourceLocation fallback = providers.rootCompositionDomain().orElseThrow(
+		Identifier fallback = providers.rootCompositionDomain().orElseThrow(
 			() -> new IllegalStateException("The executable candidate-provider plan has no root composition domain")
 		);
 		TerrainBiomeRoleSelection terrainRoles = new TerrainBiomeRoleSelection(providers);
 		if (purpose == WorldgenCompilationPurpose.BIOME_PREVIEW) {
-			Map<ResourceLocation, SurfaceBiomeFilter<Holder<Biome>>> filters = providers.providers().stream()
+			Map<Identifier, SurfaceBiomeFilter<Holder<Biome>>> filters = providers.providers().stream()
 				.collect(java.util.stream.Collectors.toUnmodifiableMap(
 					WorldgenPlans.ProviderDomain::id,
 					domain -> surfaceFilter(domain.candidates())
@@ -1007,7 +1005,7 @@ public final class MinecraftWorldgenPlanCompiler {
 			return selectionPolicy(
 				"Provider-neutral surface filtering executes after all mechanism decorators",
 				(result, spatial, target, quartX, quartY, quartZ, sampler, surfaceContext) -> {
-					ResourceLocation domain = result.usedFallback() ? fallback : result.domain();
+					Identifier domain = result.usedFallback() ? fallback : result.domain();
 					SurfaceBiomeFilter<Holder<Biome>> filter = filters.get(domain);
 					if (filter == null) {
 						throw new IllegalStateException("No surface policy for candidate domain " + domain);
@@ -1020,7 +1018,7 @@ public final class MinecraftWorldgenPlanCompiler {
 			);
 		}
 		Preset preset = selectionPreset(owner);
-		Map<ResourceLocation, UndergroundBiomeBanding.Layout<Holder<Biome>>> layouts = providers.providers().stream()
+		Map<Identifier, UndergroundBiomeBanding.Layout<Holder<Biome>>> layouts = providers.providers().stream()
 			.collect(java.util.stream.Collectors.toUnmodifiableMap(
 				WorldgenPlans.ProviderDomain::id,
 				domain -> UndergroundBiomeBanding.apply(
@@ -1036,7 +1034,7 @@ public final class MinecraftWorldgenPlanCompiler {
 				if (!selected.equals(result.baseBiome())) {
 					return selected;
 				}
-				ResourceLocation domain = result.usedFallback() ? fallback : result.domain();
+				Identifier domain = result.usedFallback() ? fallback : result.domain();
 				UndergroundBiomeBanding.Layout<Holder<Biome>> layout = layouts.get(domain);
 				if (layout == null) {
 					throw new IllegalStateException("No underground policy for candidate domain " + domain);
@@ -1148,7 +1146,7 @@ public final class MinecraftWorldgenPlanCompiler {
 		List<Holder.Reference<BiomeModifier>> modifiers = owner.lookups()
 			.lookup(FTFRegistries.BIOME_MODIFIER)
 			.map(lookup -> lookup.listElements()
-				.sorted(Comparator.comparing(holder -> holder.key().location().toString()))
+				.sorted(Comparator.comparing(holder -> holder.key().identifier().toString()))
 				.toList())
 			.orElse(List.of());
 		Map<ResourceKey<Biome>, BiomeGenerationSettings> generationSettings =
@@ -1170,7 +1168,7 @@ public final class MinecraftWorldgenPlanCompiler {
 					SurfacePlacementClassifier.Classification classification =
 						SurfacePlacementClassifier.classify(
 							value,
-							placed.unwrapKey().map(ResourceKey::location),
+							placed.unwrapKey().map(ResourceKey::identifier),
 							owner.lookups()
 						);
 					surfaceClassifications.merge(
@@ -1179,7 +1177,7 @@ public final class MinecraftWorldgenPlanCompiler {
 					ChunkLocalPlacementClassifier.Classification chunkLocal =
 						ChunkLocalPlacementClassifier.classify(
 							value,
-							placed.unwrapKey().map(ResourceKey::location),
+							placed.unwrapKey().map(ResourceKey::identifier),
 							owner.lookups()
 						);
 					chunkLocalClassifications.merge(
@@ -1226,7 +1224,7 @@ public final class MinecraftWorldgenPlanCompiler {
 	) {
 		Map<ResourceKey<Biome>, BiomeGenerationSettings> generationSettings = new LinkedHashMap<>();
 		for (Holder<Biome> biome : sortedBiomes(
-			owner, registryHolders(owner.registries().registryOrThrow(Registries.BIOME))
+			owner, registryHolders(owner.registries().lookupOrThrow(Registries.BIOME))
 		)) {
 			ResourceKey<Biome> biomeKey = biome.unwrapKey().orElseThrow(
 				() -> new IllegalStateException("Registered biome is not registry-keyed")
@@ -1260,9 +1258,7 @@ public final class MinecraftWorldgenPlanCompiler {
 			features.set(step, net.minecraft.core.HolderSet.direct(updated));
 		}
 		BiomeGenerationSettings.PlainBuilder builder = new BiomeGenerationSettings.PlainBuilder();
-		for (GenerationStep.Carving step : GenerationStep.Carving.values()) {
-			realized.getCarvers(step).forEach(carver -> builder.addCarver(step, carver));
-		}
+		realized.getCarvers().forEach(builder::addCarver);
 		for (int step = 0; step < features.size(); step++) {
 			for (Holder<PlacedFeature> feature : features.get(step)) {
 				builder.addFeature(step, feature);
@@ -1314,11 +1310,11 @@ public final class MinecraftWorldgenPlanCompiler {
 		return new WorldgenPlans.Structures(
 			descriptor(WorldgenFacet.STRUCTURES, CapabilityState.NORMALIZED,
 				"Structure sets, structures, pools, processors, and FTF rules retain selected-registry execution order"),
-			registryHolders(owner.registries().registryOrThrow(Registries.STRUCTURE)),
-			registryHolders(owner.registries().registryOrThrow(Registries.STRUCTURE_SET)),
-			registryHolders(owner.registries().registryOrThrow(Registries.TEMPLATE_POOL)),
-			registryHolders(owner.registries().registryOrThrow(Registries.PROCESSOR_LIST)),
-			registryHolders(owner.registries().registryOrThrow(FTFRegistries.STRUCTURE_RULE))
+			registryHolders(owner.registries().lookupOrThrow(Registries.STRUCTURE)),
+			registryHolders(owner.registries().lookupOrThrow(Registries.STRUCTURE_SET)),
+			registryHolders(owner.registries().lookupOrThrow(Registries.TEMPLATE_POOL)),
+			registryHolders(owner.registries().lookupOrThrow(Registries.PROCESSOR_LIST)),
+			registryHolders(owner.registries().lookupOrThrow(FTFRegistries.STRUCTURE_RULE))
 		);
 	}
 
@@ -1326,12 +1322,12 @@ public final class MinecraftWorldgenPlanCompiler {
 		WorldgenOwner owner,
 		Collection<? extends Holder<Biome>> biomes
 	) {
-		Registry<Biome> registry = owner.registries().registryOrThrow(Registries.BIOME);
+		Registry<Biome> registry = owner.registries().lookupOrThrow(Registries.BIOME);
 		return biomes.stream()
 			.<Holder<Biome>>map(biome -> biome)
 			.sorted(Comparator.comparing(holder -> holder.unwrapKey()
 				.or(() -> registry.getResourceKey(holder.value()))
-				.map(key -> key.location().toString())
+				.map(key -> key.identifier().toString())
 				.orElseThrow(() -> new IllegalStateException("Selected biome has no registry identity"))))
 			.toList();
 	}
@@ -1341,7 +1337,7 @@ public final class MinecraftWorldgenPlanCompiler {
 	}
 
 	private static <T> List<Holder.Reference<T>> registryHolders(Registry<T> registry) {
-		return registry.holders().toList();
+		return registry.listElements().toList();
 	}
 
 	private static void addCarverReports(

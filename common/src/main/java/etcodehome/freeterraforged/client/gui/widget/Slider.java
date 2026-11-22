@@ -3,6 +3,7 @@ package etcodehome.freeterraforged.client.gui.widget;
 import org.jetbrains.annotations.Nullable;
 
 import net.minecraft.client.gui.components.AbstractSliderButton;
+import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.CommonComponents;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
@@ -15,6 +16,7 @@ public class Slider extends AbstractSliderButton {
 	private Format format;
 	@Nullable
 	private Callback callback;
+	private boolean isApplying = false;
 
 	public Slider(int x, int y, int width, int height, float initialValue, float min, float max, Component name, Format format, @Nullable Callback callback) {
 		super(x, y, width, height, CommonComponents.EMPTY, 0.0);
@@ -23,12 +25,18 @@ public class Slider extends AbstractSliderButton {
 		this.min = min;
 		this.max = max;
 		this.callback = callback;
-		this.setValue(this.getSliderValue(initialValue));
+		this.value = this.getSliderValue(initialValue);
+		this.updateMessage();
 	}
 
+	@Override
 	public void setValue(double value) {
+		double prev = this.value;
 		this.value = Double.isNaN(value) ? 0.0 : Mth.clamp(value, 0.0, 1.0);
 		this.updateMessage();
+		if (!this.isApplying && prev != this.value) {
+			this.applyValue();
+		}
 	}
 
 	public double getValue() {
@@ -72,9 +80,22 @@ public class Slider extends AbstractSliderButton {
 
 	@Override
 	public void applyValue() {
-		if (this.callback != null) {
-			this.setValue(this.callback.apply(this, this.value));
+		if (this.callback != null && !this.isApplying) {
+			this.isApplying = true;
+			try {
+				double adjusted = this.callback.apply(this, this.value);
+				this.value = Double.isNaN(adjusted) ? 0.0 : Mth.clamp(adjusted, 0.0, 1.0);
+				this.updateMessage();
+			} finally {
+				this.isApplying = false;
+			}
 		}
+	}
+
+	@Override
+	public void onRelease(MouseButtonEvent event) {
+		super.onRelease(event);
+		this.applyValue();
 	}
 
 	@Override

@@ -281,8 +281,7 @@ public final class FTFBiomeLocateQuery implements BiomeLocateSearch.Query {
 			source.continentalness(),
 			source.erosion(),
 			source.depth(),
-			source.weirdness(),
-			source.spawnTarget()
+			source.weirdness()
 		);
 		// Runtime and preview samplers are already decorated for this plan. Reapplying contributed
 		// stages here could compound their transformations, so isolate the functions and copy only
@@ -296,7 +295,9 @@ public final class FTFBiomeLocateQuery implements BiomeLocateSearch.Query {
 			semantics.seed(),
 			semantics.surfaceContext()
 		);
-		isolatedState.setSpawnSearch(sourceState.getSpawnSearch());
+		if (sourceState.getSpawnSearch() != null) {
+			isolatedState.setSpawnSearch(sourceState.getSpawnSearch());
+		}
 		isolatedState.setWorldgenPlan(selection.plan());
 		return isolated;
 	}

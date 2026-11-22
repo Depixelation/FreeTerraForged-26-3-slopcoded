@@ -3,6 +3,7 @@ package etcodehome.freeterraforged.platform;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 
 import dev.architectury.injectables.annotations.ExpectPlatform;
 import etcodehome.freeterraforged.FTFCommon;
@@ -25,13 +26,20 @@ public class ConfigUtil {
 
 	@ExpectPlatform
 	public static Path getConfigPath() {
-		throw new IllegalStateException();
+		for (String pkg : new String[]{"fabric", "neoforge"}) {
+			try {
+				Class<?> impl = Class.forName("etcodehome.freeterraforged.platform." + pkg + ".ConfigUtilImpl");
+				return (Path) impl.getMethod("getConfigPath").invoke(null);
+			} catch (ReflectiveOperationException ignored) {
+			}
+		}
+		return Paths.get("config");
 	}
 
 	static {
 		if(!Files.exists(FTF_CONFIG_PATH)) {
 			try {
-				Files.createDirectory(FTF_CONFIG_PATH);
+				Files.createDirectories(FTF_CONFIG_PATH);
 			} catch (IOException e) {
 				e.printStackTrace();
 			}

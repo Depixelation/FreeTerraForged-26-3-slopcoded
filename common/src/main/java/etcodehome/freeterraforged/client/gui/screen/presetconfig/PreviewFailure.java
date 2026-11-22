@@ -4,7 +4,7 @@ import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutionException;
 
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.network.chat.Component;
 import etcodehome.freeterraforged.FTFCommon;
 
@@ -18,7 +18,7 @@ final class PreviewFailure {
         return new PreviewFailure();
     }
 
-    static void renderUnavailable(GuiGraphics graphics, int x, int y, int width, int height) {
+    static void renderUnavailable(GuiGraphicsExtractor graphics, int x, int y, int width, int height) {
         graphics.fill(x, y, x + width, y + height, 0xFF151515);
 
         int iconWidth = Math.min(48, Math.max(32, width - 16));
@@ -40,7 +40,7 @@ final class PreviewFailure {
             graphics.fill(iconX + 6 + offset, slashY, iconX + 9 + offset, slashY + 3, 0xFFDD6666);
         }
 
-        graphics.drawCenteredString(
+        graphics.centeredText(
             Minecraft.getInstance().font,
             Component.literal("Preview Unavailable"),
             x + width / 2,

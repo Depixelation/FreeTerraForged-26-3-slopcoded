@@ -13,7 +13,7 @@ import com.mojang.datafixers.util.Pair;
 import net.minecraft.core.Holder;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.biome.Climate;
 import net.minecraft.world.level.biome.MultiNoiseBiomeSource;
@@ -39,11 +39,11 @@ import terrablender.api.RegionType;
 import terrablender.api.Regions;
 
 public final class TerraBlenderCapabilityProvider implements WorldgenCapabilityProvider {
-	private static final ResourceLocation ID = FTFCommon.location("terrablender_regions");
+	private static final Identifier ID = FTFCommon.location("terrablender_regions");
 	private static final long SALT = 0x5d6f7a2c8b9134e1L;
 
 	@Override
-	public ResourceLocation id() {
+	public Identifier id() {
 		return ID;
 	}
 
@@ -88,6 +88,10 @@ public final class TerraBlenderCapabilityProvider implements WorldgenCapabilityP
 		return WorldgenQueryMode.ISOLATED_PARALLEL_READ;
 	}
 
+	private static Identifier getRegionName(Region region) {
+		return region.getName();
+	}
+
 	@Override
 	public WorldgenApplicability applicability(
 		WorldgenFacet facet,
@@ -100,8 +104,8 @@ public final class TerraBlenderCapabilityProvider implements WorldgenCapabilityP
 			) instanceof MultiNoiseBiomeSource)) {
 			return WorldgenApplicability.NOT_APPLICABLE;
 		}
-		List<ResourceLocation> ids = Regions.get(RegionType.OVERWORLD).stream()
-			.map(Region::getName)
+		List<Identifier> ids = Regions.get(RegionType.OVERWORLD).stream()
+			.map(TerraBlenderCapabilityProvider::getRegionName)
 			.toList();
 		return isContributingRegionIds(ids)
 			? WorldgenApplicability.APPLICABLE
@@ -144,30 +148,31 @@ public final class TerraBlenderCapabilityProvider implements WorldgenCapabilityP
 
 	private static WorldgenPlans.ProviderSelection snapshot(WorldgenCompilationContext context) {
 		context.checkCancelled();
-		Registry<Biome> biomes = context.owner().registries().registryOrThrow(Registries.BIOME);
+		Registry<Biome> biomes = context.owner().registries().lookupOrThrow(Registries.BIOME);
 		List<Region> regions = List.copyOf(Regions.get(RegionType.OVERWORLD));
 		if (regions.isEmpty()) {
 			throw new IllegalStateException("TerraBlender exposes no Overworld default provider");
 		}
-		Set<ResourceLocation> ids = new HashSet<>();
+		Set<Identifier> ids = new HashSet<>();
 		List<WorldgenPlans.ProviderDomain> providers = new ArrayList<>(regions.size());
-		Holder<Biome> deferred = biomes.getHolderOrThrow(Region.DEFERRED_PLACEHOLDER);
+		Holder<Biome> deferred = biomes.getOrThrow(Region.DEFERRED_PLACEHOLDER);
 		for (int order = 0; order < regions.size(); order++) {
 			context.checkCancelled();
 			Region region = regions.get(order);
-			if (!ids.add(region.getName())) {
-				throw new IllegalStateException("Duplicate TerraBlender provider ID: " + region.getName());
+			Identifier regionId = getRegionName(region);
+			if (!ids.add(regionId)) {
+				throw new IllegalStateException("Duplicate TerraBlender provider ID: " + regionId);
 			}
 			List<Pair<Climate.ParameterPoint, Holder<Biome>>> registeredEntries = new ArrayList<>();
 			region.addBiomes(biomes, entry -> registeredEntries.add(Pair.of(
-				entry.getFirst(), biomes.getHolderOrThrow(entry.getSecond())
+				entry.getFirst(), biomes.getOrThrow(entry.getSecond())
 			)));
 			List<Pair<Climate.ParameterPoint, Holder<Biome>>> entries = deduplicateEntries(registeredEntries);
 			if (entries.isEmpty()) {
-				throw new IllegalStateException("TerraBlender provider has no public candidates: " + region.getName());
+				throw new IllegalStateException("TerraBlender provider has no public candidates: " + regionId);
 			}
 			providers.add(new WorldgenPlans.ProviderDomain(
-				region.getName(), region.getWeight(), new Climate.ParameterList<>(entries), order
+				regionId, region.getWeight(), new Climate.ParameterList<>(entries), order
 			));
 		}
 		context.checkCancelled();
@@ -188,8 +193,8 @@ public final class TerraBlenderCapabilityProvider implements WorldgenCapabilityP
 		return List.copyOf(new LinkedHashSet<>(entries));
 	}
 
-	static boolean isContributingRegionIds(List<ResourceLocation> ids) {
-		return ids.stream().anyMatch(id -> !id.equals(ResourceLocation.withDefaultNamespace("overworld")));
+	static boolean isContributingRegionIds(List<Identifier> ids) {
+		return ids.stream().anyMatch(id -> !id.equals(Identifier.withDefaultNamespace("overworld")));
 	}
 
 	private static boolean isOverworldRegionGraph(WorldgenCompilationContext context) {

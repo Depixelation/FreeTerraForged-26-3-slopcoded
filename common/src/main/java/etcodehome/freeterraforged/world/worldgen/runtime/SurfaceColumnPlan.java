@@ -46,7 +46,7 @@ public record SurfaceColumnPlan(
 		if (steps.size() > RAW) {
 			for (PlacedFeature feature : steps.get(RAW).features()) {
 				// Only this exact implementation is known to be chunk-local and placement-independent.
-				if (feature.feature().value().feature().getClass() == ScreeFeature.class
+				if (feature.feature().value().getClass() == ScreeFeature.class
 					&& feature.placement().isEmpty()) eligible.add(feature);
 			}
 		}
@@ -75,8 +75,7 @@ public record SurfaceColumnPlan(
 			}
 			byBiome.put(key, moved);
 			var builder = new BiomeGenerationSettings.PlainBuilder();
-			for (GenerationStep.Carving step : GenerationStep.Carving.values())
-				biome.getCarvers(step).forEach(carver -> builder.addCarver(step, carver));
+			biome.getCarvers().forEach(builder::addCarver);
 			for (int step = 0; step < biome.features().size(); step++) {
 				for (Holder<PlacedFeature> feature : biome.features().get(step)) {
 					if (!moved.contains(feature.value())) builder.addFeature(step, feature);
@@ -92,19 +91,19 @@ public record SurfaceColumnPlan(
 		Set<Holder<Biome>> biomes = new java.util.HashSet<>();
 		// SURFACE already requires BIOMES at radius one, matching decoration's eligibility neighborhood.
 		ChunkPos.rangeClosed(chunk.getPos(), 1).forEach(pos -> {
-			for (var section : region.getChunk(pos.x, pos.z).getSections()) section.getBiomes().getAll(biomes::add);
+			for (var section : region.getChunk(pos.x(), pos.z()).getSections()) section.getBiomes().getAll(biomes::add);
 		});
 		biomes.retainAll(possibleBiomes);
 		Set<PlacedFeature> selected = identitySet();
 		for (Holder<Biome> biome : biomes) selected.addAll(this.byBiome.getOrDefault(biome.unwrapKey().orElse(null), Set.of()));
 		if (selected.isEmpty()) return;
-		var origin = SectionPos.of(chunk.getPos(), region.getMinSection()).origin();
+		var origin = SectionPos.of(chunk.getPos(), region.getMinSectionY()).origin();
 		var random = new WorldgenRandom(new XoroshiroRandomSource(0));
 		long decorationSeed = random.setDecorationSeed(region.getSeed(), origin.getX(), origin.getZ());
 		for (Root root : this.roots) {
 			if (selected.contains(root.feature)) {
 				random.setFeatureSeed(decorationSeed, root.originalIndex, RAW);
-				root.feature.placeWithBiomeCheck(region, generator, random, origin);
+				root.feature.place(region, generator, random, origin);
 			}
 		}
 	}

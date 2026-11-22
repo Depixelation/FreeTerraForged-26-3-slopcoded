@@ -7,7 +7,8 @@ import com.mojang.serialization.JsonOps;
 
 import net.minecraft.core.HolderLookup;
 import net.minecraft.world.level.levelgen.feature.Feature;
-import net.minecraft.world.level.levelgen.feature.configurations.OreConfiguration;
+import net.minecraft.world.level.levelgen.feature.OreFeature;
+import net.minecraft.world.level.levelgen.feature.ScatteredOreFeature;
 import net.minecraft.world.level.levelgen.placement.CountPlacement;
 import net.minecraft.world.level.levelgen.placement.HeightRangePlacement;
 import net.minecraft.world.level.levelgen.placement.InSquarePlacement;
@@ -34,12 +35,9 @@ public final class OreContractClassifier {
 	public Result classify(PlacedFeature placedFeature) {
 		String phase = "configured_feature";
 		try {
-			var configured = placedFeature.feature().value();
-			if (configured.feature() != Feature.ORE && configured.feature() != Feature.SCATTERED_ORE) {
+			Feature configured = placedFeature.feature().value();
+			if (!(configured instanceof OreFeature) && !(configured instanceof ScatteredOreFeature)) {
 				return Result.notOre();
-			}
-			if (!(configured.config() instanceof OreConfiguration)) {
-				return Result.skipped("INVALID_ORE_CONFIGURATION_SHAPE");
 			}
 
 			phase = "placement_contract";

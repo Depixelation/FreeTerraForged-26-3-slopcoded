@@ -43,7 +43,7 @@ public final class WorldgenProviderCatalog {
 	}
 
 	public static WorldgenProviderCatalog of(List<? extends WorldgenCapabilityProvider> providers) {
-		Map<net.minecraft.resources.ResourceLocation, List<WorldgenCapabilityProvider>> byId = new HashMap<>();
+		Map<net.minecraft.resources.Identifier, List<WorldgenCapabilityProvider>> byId = new HashMap<>();
 		providers.forEach(provider -> byId.computeIfAbsent(
 			Objects.requireNonNull(provider, "provider").id(), ignored -> new ArrayList<>()
 		).add(provider));
@@ -215,10 +215,10 @@ public final class WorldgenProviderCatalog {
 	}
 
 	private static OrderResult order(List<ProviderBinding> input) {
-		Map<net.minecraft.resources.ResourceLocation, ProviderBinding> providers = new HashMap<>();
+		Map<net.minecraft.resources.Identifier, ProviderBinding> providers = new HashMap<>();
 		input.forEach(binding -> providers.put(binding.metadata().id(), binding));
 		List<FailedProvider> failures = new ArrayList<>();
-		Set<net.minecraft.resources.ResourceLocation> rejected = new HashSet<>();
+		Set<net.minecraft.resources.Identifier> rejected = new HashSet<>();
 		boolean changed;
 		do {
 			changed = false;
@@ -242,9 +242,9 @@ public final class WorldgenProviderCatalog {
 			}
 		} while (changed);
 
-		Map<net.minecraft.resources.ResourceLocation, Set<net.minecraft.resources.ResourceLocation>> outgoing =
+		Map<net.minecraft.resources.Identifier, Set<net.minecraft.resources.Identifier>> outgoing =
 			new HashMap<>();
-		Map<net.minecraft.resources.ResourceLocation, Integer> incoming = new HashMap<>();
+		Map<net.minecraft.resources.Identifier, Integer> incoming = new HashMap<>();
 		providers.keySet().stream().filter(id -> !rejected.contains(id)).forEach(id -> {
 			outgoing.put(id, new HashSet<>());
 			incoming.put(id, 0);
@@ -263,8 +263,8 @@ public final class WorldgenProviderCatalog {
 			}
 		}
 
-		PriorityQueue<net.minecraft.resources.ResourceLocation> ready = new PriorityQueue<>(
-			Comparator.comparing(net.minecraft.resources.ResourceLocation::toString)
+		PriorityQueue<net.minecraft.resources.Identifier> ready = new PriorityQueue<>(
+			Comparator.comparing(net.minecraft.resources.Identifier::toString)
 		);
 		incoming.forEach((id, count) -> {
 			if (count == 0) {
@@ -283,7 +283,7 @@ public final class WorldgenProviderCatalog {
 			});
 		}
 		if (ordered.size() != incoming.size()) {
-			Set<net.minecraft.resources.ResourceLocation> residue = new HashSet<>(incoming.keySet());
+			Set<net.minecraft.resources.Identifier> residue = new HashSet<>(incoming.keySet());
 			ordered.forEach(binding -> residue.remove(binding.metadata().id()));
 			for (var id : residue.stream().sorted(Comparator.comparing(Object::toString)).toList()) {
 				ProviderBinding binding = providers.get(id);

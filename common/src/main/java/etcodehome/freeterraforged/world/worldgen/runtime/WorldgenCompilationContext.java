@@ -6,13 +6,13 @@ import java.util.Objects;
 import java.util.concurrent.CancellationException;
 import java.util.function.BooleanSupplier;
 
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 
 public final class WorldgenCompilationContext {
 	private final WorldgenOwner owner;
 	private final WorldgenCompilationPurpose purpose;
 	private final BooleanSupplier cancelled;
-	private final Map<ResourceLocation, Object> snapshots = new HashMap<>();
+	private final Map<Identifier, Object> snapshots = new HashMap<>();
 
 	public WorldgenCompilationContext(WorldgenOwner owner, WorldgenCompilationPurpose purpose) {
 		this(owner, purpose, () -> false);
@@ -42,7 +42,7 @@ public final class WorldgenCompilationContext {
 		}
 	}
 
-	public <T> T snapshot(ResourceLocation provider, Class<T> type, SnapshotFactory<T> factory) throws Exception {
+	public <T> T snapshot(Identifier provider, Class<T> type, SnapshotFactory<T> factory) throws Exception {
 		this.checkCancelled();
 		Objects.requireNonNull(provider, "provider");
 		Objects.requireNonNull(type, "type");

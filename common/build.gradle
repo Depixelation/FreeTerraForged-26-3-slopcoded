@@ -1,46 +1,21 @@
-architectury {
-    common("fabric", "neoforge")
-}
-
 loom {
     accessWidenerPath = file("src/main/resources/freeterraforged.accesswidener")
 }
 
 dependencies {
-    modImplementation "net.fabricmc:fabric-loader:${rootProject.fabric_loader_version}"
-    modImplementation "com.github.glitchfiend:TerraBlender-neoforge:${rootProject.minecraft_version}-${rootProject.terrablender_version}"
-	compileOnly "com.electronwill.night-config:toml:3.6.7"
-	modCompileOnly "maven.modrinth:biolith:3.0.14-neoforge"
-	modCompileOnly "maven.modrinth:lithostitched:1.8.0+beta6-neoforge-21.1"
-	compileOnly "dev.architectury:architectury-injectables:1.0.13"
-	testImplementation "org.junit.jupiter:junit-jupiter:5.11.4"
+    implementation "net.fabricmc:fabric-loader:${rootProject.fabric_loader_version}"
+    compileOnly files("${rootProject.projectDir}/libs/TerraBlender-fabric-26.3-26.3.0.0.9.jar")
+    compileOnly "com.electronwill.night-config:toml:3.6.7"
+    compileOnly files("${rootProject.projectDir}/libs/biolith-fabric-3.8.0-beta.2.jar")
+    compileOnly files("${rootProject.projectDir}/libs/lithostitched-2.0.4-fabric-26.3.jar")
+    compileOnly "dev.architectury:architectury-injectables:1.0.13"
+    testImplementation "org.junit.jupiter:junit-jupiter:5.11.4"
+    testRuntimeOnly "org.junit.platform:junit-platform-launcher:1.11.4"
 }
 
 repositories {
     mavenCentral()
     maven { url "https://api.modrinth.com/maven" }
-}
-
-remapJar {
-    archiveClassifier.set("${rootProject.minecraft_version}")
-}
-
-subprojects {
-    afterEvaluate {
-        if (plugins.hasPlugin("architectury-plugin")) {
-            loom {
-                runConfigs.configureEach {
-                    // Forces Log4j to output DEBUG level messages
-                    systemProperty "log4j2.debug", "true"
-                    systemProperty "fabric.development", "true"
-
-                    // Standard fix to prevent Loom from swallowing terminal colors/output
-                    vmArg "-Dterminal.jline=false"
-                    vmArg "-Dlog4j.skipJansi=true"
-                }
-            }
-        }
-    }
 }
 
 processResources {

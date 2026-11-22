@@ -9,11 +9,14 @@ import etcodehome.freeterraforged.world.worldgen.cell.heightmap.Levels;
 import etcodehome.freeterraforged.world.worldgen.noise.NoiseUtil;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.input.MouseButtonEvent;
+import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.network.chat.CommonComponents;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
+import etcodehome.freeterraforged.FTFCommon;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.SpawnType;
 import etcodehome.freeterraforged.data.worldgen.preset.settings.WorldSettings;
 import etcodehome.freeterraforged.world.worldgen.cell.heightmap.PreviewGrid;
@@ -24,7 +27,7 @@ public class Preview3D extends Button implements IPreviewHandler {
 
     // Statically cached backing texture shared across widget instances
     private static DynamicTexture STATIC_TEXTURE_CACHE;
-    private static ResourceLocation STATIC_CACHE_LOCATION;
+    private static Identifier STATIC_CACHE_LOCATION;
 
     private final PresetEditorPage page;
     private final PreviewState state = new PreviewState();
@@ -262,6 +265,8 @@ public class Preview3D extends Button implements IPreviewHandler {
         if (pixels == null || this.pendingTextureWidth <= 0 || this.pendingTextureHeight <= 0) return;
 
         if (STATIC_TEXTURE_CACHE == null
+                || STATIC_TEXTURE_CACHE.getPixels() == null
+                || STATIC_TEXTURE_CACHE.getPixels().isClosed()
                 || STATIC_TEXTURE_CACHE.getPixels().getWidth() != this.pendingTextureWidth
                 || STATIC_TEXTURE_CACHE.getPixels().getHeight() != this.pendingTextureHeight) {
 
@@ -269,14 +274,15 @@ public class Preview3D extends Button implements IPreviewHandler {
                 STATIC_TEXTURE_CACHE.close();
                 Minecraft.getInstance().getTextureManager().release(STATIC_CACHE_LOCATION);
             }
-            STATIC_TEXTURE_CACHE = new DynamicTexture(new NativeImage(this.pendingTextureWidth, this.pendingTextureHeight, true));
-            STATIC_CACHE_LOCATION = Minecraft.getInstance().getTextureManager().register("ftf_preview_cache_3d", STATIC_TEXTURE_CACHE);
+            STATIC_TEXTURE_CACHE = new DynamicTexture(() -> "ftf_preview_cache_3d", new NativeImage(this.pendingTextureWidth, this.pendingTextureHeight, true));
+            STATIC_CACHE_LOCATION = Identifier.fromNamespaceAndPath(FTFCommon.MOD_ID, "ftf_preview_cache_3d");
+            Minecraft.getInstance().getTextureManager().register(STATIC_CACHE_LOCATION, STATIC_TEXTURE_CACHE);
         }
 
         NativeImage image = STATIC_TEXTURE_CACHE.getPixels();
         for (int y = 0; y < this.pendingTextureHeight; y++) {
             for (int x = 0; x < this.pendingTextureWidth; x++) {
-                image.setPixelRGBA(x, y, pixels[y * this.pendingTextureWidth + x]);
+                image.setPixelABGR(x, y, pixels[y * this.pendingTextureWidth + x]);
             }
         }
         STATIC_TEXTURE_CACHE.upload();
@@ -308,11 +314,11 @@ public class Preview3D extends Button implements IPreviewHandler {
     }
 
     @Override
-    public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        if (handleClick(mouseX, mouseY, button)) {
+    public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+        if (handleClick(event.x(), event.y(), event.button())) {
             return true;
         }
-        return super.mouseClicked(mouseX, mouseY, button);
+        return super.mouseClicked(event, doubleClick);
     }
 
     @Override
@@ -324,7 +330,7 @@ public class Preview3D extends Button implements IPreviewHandler {
     }
 
     @Override
-    public void renderWidget(GuiGraphics guiGraphics, int mx, int my, float partialTicks) {
+    public void extractContents(GuiGraphicsExtractor guiGraphics, int mx, int my, float partialTicks) {
         int x = this.getX();
         int y = this.getY();
 
@@ -337,15 +343,17 @@ public class Preview3D extends Button implements IPreviewHandler {
             this.uploadPendingTexture();
         }
 
-        if (STATIC_CACHE_LOCATION != null) {
-            guiGraphics.blit(STATIC_CACHE_LOCATION, x, y, 0.0F, 0.0F, this.width, this.height, this.width, this.height);
+        if (STATIC_CACHE_LOCATION != null && STATIC_TEXTURE_CACHE != null && STATIC_TEXTURE_CACHE.getPixels() != null && !STATIC_TEXTURE_CACHE.getPixels().isClosed()) {
+            int texW = STATIC_TEXTURE_CACHE.getPixels().getWidth();
+            int texH = STATIC_TEXTURE_CACHE.getPixels().getHeight();
+            guiGraphics.blit(RenderPipelines.GUI_TEXTURED, STATIC_CACHE_LOCATION, x, y, 0.0F, 0.0F, this.width, this.height, texW, texH, texW, texH);
         } else {
             guiGraphics.fill(x, y, x + this.width, y + this.height, 0xFF000000);
         }
 
         renderSpawnMarker(guiGraphics);
         updateLegend(mx, my);
-        renderLegend(guiGraphics, mx, my, this.state.legendLabels, this.state.legendValues, x, y + this.width + 30, 10, 0xFFFFFF);
+        renderLegend(guiGraphics, mx, my, this.state.legendLabels, this.state.legendValues, x, y + this.width + 30, 10, 0xFFFFFFFF);
     }
 
     private static float getHeightScale(float blockW, double zoomValue) {
@@ -364,11 +372,11 @@ public class Preview3D extends Button implements IPreviewHandler {
         return darkenColor(baseColor, shadeFactor);
     }
 
-    private void renderSpawnMarker(GuiGraphics guiGraphics) {
+    private void renderSpawnMarker(GuiGraphicsExtractor guiGraphics) {
         WorldSettings.Properties props = this.page.preset.getPreset().world().properties;
 
         if (props.spawnType == SpawnType.USER_SELECTED || props.spawnType == SpawnType.CONTINENT_CENTER) {
-            int zoomValue = this.getZoom();
+            int zoomValue = this.state.zoom > 0 ? this.state.zoom : this.getZoom();
             PreviewGrid activeTile = this.state.grid;
             int tileSize = activeTile != null ? activeTile.size() : 0;
 
@@ -395,21 +403,29 @@ public class Preview3D extends Button implements IPreviewHandler {
                     int dx = ix - (tileSize / 2);
                     int dz = iz - (tileSize / 2);
 
+                    double zoomParam = this.state.zoomParam > 0.0D ? this.state.zoomParam : (this.page.zoom3D != null ? this.page.zoom3D.getLerpedValue() : 95.0D);
                     int isoX = centerVisualX + (dx - dz) * halfW;
-                    int isoY = centerVisualY + (dx + dz) * halfH - Math.round(cell.height * getHeightScale((float) blockW, this.page.zoom3D.getLerpedValue()));
+                    int isoY = centerVisualY + (dx + dz) * halfH - Math.round(cell.height * getHeightScale((float) blockW, zoomParam));
 
                     int markerX = isoX + halfW;
                     int markerY = isoY + halfH;
 
-                    int size = 6;
-                    int color = 0xFFFFFFFF;
-                    int shadow = 0xFF000000;
+                    int minX = this.getX() + 4;
+                    int maxX = this.getX() + this.width - 4;
+                    int minY = this.getY() + 4;
+                    int maxY = this.getY() + this.height - 4;
 
-                    guiGraphics.fill(markerX - size + 1, markerY + 1, markerX + size + 2, markerY + 2, shadow);
-                    guiGraphics.fill(markerX - size, markerY, markerX + size + 1, markerY + 1, color);
+                    if (markerX >= minX && markerX <= maxX && markerY >= minY && markerY <= maxY) {
+                        int size = 6;
+                        int color = 0xFFFFFFFF;
+                        int shadow = 0xFF000000;
 
-                    guiGraphics.fill(markerX + 1, markerY - size + 1, markerX + 2, markerY + size + 2, shadow);
-                    guiGraphics.fill(markerX, markerY - size, markerX + 1, markerY + size + 1, color);
+                        guiGraphics.fill(markerX - size + 1, markerY + 1, markerX + size + 2, markerY + 2, shadow);
+                        guiGraphics.fill(markerX - size, markerY, markerX + size + 1, markerY + 1, color);
+
+                        guiGraphics.fill(markerX + 1, markerY - size + 1, markerX + 2, markerY + size + 2, shadow);
+                        guiGraphics.fill(markerX, markerY - size, markerX + 1, markerY + size + 1, color);
+                    }
                 }
             }
         }
@@ -435,7 +451,7 @@ public class Preview3D extends Button implements IPreviewHandler {
             int left = this.getX();
             int top = this.getY();
 
-            int zoomValue = this.getZoom();
+            int zoomValue = this.state.zoom > 0 ? this.state.zoom : this.getZoom();
             int tileSize = activeTile.size();
 
             int totalWidth = Math.max(1, tileSize * zoomValue);
@@ -505,7 +521,7 @@ public class Preview3D extends Button implements IPreviewHandler {
     public static void resetToBlack() {
         if (STATIC_TEXTURE_CACHE != null) {
             NativeImage pixels = STATIC_TEXTURE_CACHE.getPixels();
-            if (pixels != null) {
+            if (pixels != null && !pixels.isClosed()) {
                 pixels.fillRect(0, 0, pixels.getWidth(), pixels.getHeight(), 0xFF000000);
                 STATIC_TEXTURE_CACHE.upload();
             }
