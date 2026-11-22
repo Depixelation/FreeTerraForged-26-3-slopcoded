@@ -1,6 +1,9 @@
 This fork is a port of the FreeTerraForged 1.21.1_unstable branch from commit 16f68124d6de4f4654456008275efd344fc1c722 ported to 26.3 in Antigravity by Gemini Argon. The Fabric subproject for 26.3 compiles and runs, with overall generation and presets seemingly working. The mod has remained running without obvious issue on a Fabric 26.3 server for several days. However, no testing has been done beyond regular use by me in singleplayer and on the server, several non-breaking bugs are known to exist, and correctness and quality has not been human reviewed. The Neoforge subproject is not tested and presumed to be nonworking. This fork was made in the process of building a custom modpack for a personal server, and was not made with public use in mind. This repository is public only because I do not see any harm in making it so. No support nor further development is expected from me on this project.  
 
-I believe TerraBlender, Biolith, and Lithostitched jars need to be placed into libs/ manually if you wish to compile this project. 
+Compilation of this project requires manual placement of the following .jar files (exact) into `libs/`:
+- `TerraBlender-fabric-26.3-26.3.0.0.9.jar` (TerraBlender 26.3.0.0.9)
+- `biolith-fabric-3.8.0-beta.2.jar` (Biolith 3.8.0-beta.2)
+- `lithostitched-2.0.4-fabric-26.3.jar` (Lithostitched 2.0.4)
 
 If the devs of any of the upstream projects wish for me to remove this repository, please let me know via the issue tracker.
 
